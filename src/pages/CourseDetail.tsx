@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import introProgramming from "../assets/intro-programming.webp";
-import webDevelopment from "../assets/WebDevelopment.png";
+import webDevelopment from "../assets/webDevelopment.png";
 import DBM from "../assets/DBM.png";
 import DSA from "../assets/DSA.jpg";
 import NB from "../assets/NB.png";

@@ -13,7 +13,7 @@ import { storage } from "../utils/storage";
 import DashboardRightWidgets from "../components/dashboard/DashboardRightWidgets";
 
 import introProgramming from "../assets/intro-programming.webp";
-import webDevelopment from "../assets/WebDevelopment.png";
+import webDevelopment from "../assets/webDevelopment.png";
 import DBM from "../assets/DBM.png";
 import DSA from "../assets/DSA.jpg";
 import NB from "../assets/NB.png";
