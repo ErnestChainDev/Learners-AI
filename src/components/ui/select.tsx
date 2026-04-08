@@ -2,7 +2,7 @@ import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 
 const Select = SelectPrimitive.Root
 
@@ -86,7 +86,7 @@ const SelectContent = React.forwardRef<
         className={cn(
           "p-1",
           position === "popper" &&
-            "h-(--radix-select-trigger-height)] w-full min-w-(--radix-select-trigger-width)]"
+            "h-[--radix-select-trigger-height] w-full min-w-[--radix-select-trigger-width]"
         )}
       >
         {children}
