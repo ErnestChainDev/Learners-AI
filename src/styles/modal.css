@@ -1,0 +1,48 @@
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.40);
+}
+
+.glass-card {
+  width: min(680px, 92vw);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  padding: 28px 26px;
+}
+
+.glass-card-animate {
+  transform-origin: center;
+  will-change: transform, opacity;
+  animation: modalPop 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.92);
+    opacity: 0;
+  }
+  60% {
+    transform: translate(-50%, -50%) scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+
+.icon-btn {
+  border-radius: 12px;
+  padding: 8px;
+  transition: background 160ms ease, transform 160ms ease, color 160ms ease;
+}
+.icon-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}

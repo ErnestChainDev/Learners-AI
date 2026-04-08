@@ -1,0 +1,154 @@
+/* ===== ROOT DESIGN TOKENS ===== */
+:root {
+  --bg: #FFFDF5;
+  --fg: #1E293B;
+  --muted: #64748B;
+  --border: #1E293B;
+
+  --accent: #8B5CF6;
+  --secondary: #F472B6;
+  --tertiary: #FBBF24;
+  --success: #34D399;
+  --danger: #EF4444;
+}
+
+/* ===== PAGE ===== */
+.feedback-page {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ===== CARD ===== */
+.pg-card {
+  background: white;
+  border: 2px solid var(--border);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 6px 6px 0px var(--border);
+  transition: all 0.2s ease;
+}
+
+.pg-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0px var(--border);
+}
+
+/* ===== BUTTON ===== */
+.pg-btn {
+  border: 2px solid var(--border);
+  border-radius: 9999px;
+  padding: 12px 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.pg-btn-primary {
+  background: var(--accent);
+  color: white;
+  box-shadow: 4px 4px 0px var(--border);
+}
+
+.pg-btn-primary:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px var(--border);
+}
+
+.pg-btn-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px var(--border);
+}
+
+/* ===== INPUT ===== */
+.pg-input,
+.pg-select,
+.pg-textarea {
+  width: 100%;
+  border: 2px solid #CBD5E1;
+  border-radius: 16px;
+  padding: 12px;
+  font-size: 14px;
+  background: white;
+}
+
+.pg-input:focus,
+.pg-select:focus,
+.pg-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 4px 4px 0px var(--accent);
+}
+
+/* ===== TAG ===== */
+.pg-tag {
+  border: 2px solid var(--border);
+  border-radius: 9999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: white;
+  cursor: pointer;
+}
+
+.pg-tag.active {
+  background: var(--accent);
+  color: white;
+  box-shadow: 3px 3px 0px var(--border);
+}
+
+/* ===== RATING ===== */
+.pg-rating {
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  font-weight: 700;
+  background: white;
+  cursor: pointer;
+}
+
+.pg-rating.active {
+  background: var(--secondary);
+  color: white;
+  box-shadow: 4px 4px 0px var(--border);
+}
+
+/* ===== STAT ===== */
+.pg-stat {
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  padding: 16px;
+  background: white;
+  box-shadow: 4px 4px 0px var(--border);
+}
+
+/* ===== PROGRESS ===== */
+.pg-progress {
+  height: 10px;
+  border: 2px solid var(--border);
+  border-radius: 9999px;
+  overflow: hidden;
+  background: #E2E8F0;
+}
+
+.pg-progress-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+/* ===== ALERTS ===== */
+.pg-success {
+  border: 2px solid var(--success);
+  background: #ECFDF5;
+  padding: 12px;
+  border-radius: 16px;
+}
+
+.pg-error {
+  border: 2px solid var(--danger);
+  background: #FEF2F2;
+  padding: 12px;
+  border-radius: 16px;
+}
