@@ -70,7 +70,7 @@
 .qpg-deco {
   position: fixed;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
 
 .qpg-deco--circle {

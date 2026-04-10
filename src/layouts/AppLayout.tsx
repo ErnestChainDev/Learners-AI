@@ -566,6 +566,15 @@ export default function AppLayout() {
                 <span>Home</span>
               </NavLink>
 
+              {/* COURSES */}
+              <NavLink
+                to="/courses"
+                className={({ isActive }) => mobileItemClass(isActive, isQuizPage)}
+              >
+                <BookOpen className="h-5.5 w-5.5" strokeWidth={2.5} />
+                <span>Courses</span>
+              </NavLink>
+
               {/* AI */}
               <button
                 onClick={() => {

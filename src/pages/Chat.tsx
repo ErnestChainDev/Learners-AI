@@ -27,6 +27,9 @@ type ChatRouteState = { openRecent?: boolean; forceNew?: boolean };
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const CHAT_BASE = `${API_BASE}/chat`;
 
+// ← Change this value to match your AppLayout navbar height exactly
+const NAVBAR_HEIGHT = 65;
+
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
   bg: "#FFFDF5",
@@ -49,7 +52,8 @@ const T = {
 } as const;
 
 /* ─── Google Fonts injection ─────────────────────────────────────────────── */
-const FONT_LINK = "https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap";
+const FONT_LINK =
+  "https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap";
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function getAuthHeaders(): HeadersInit {
@@ -64,7 +68,11 @@ function getAuthHeaders(): HeadersInit {
 async function safeJson<T = unknown>(res: Response): Promise<T | null> {
   const text = await res.text();
   if (!text) return null;
-  try { return JSON.parse(text) as T; } catch { return null; }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 }
 
 function getErrorMessage(data: unknown, fallback: string): string {
@@ -248,17 +256,29 @@ export default function Chat() {
     if (handledLocationKeyRef.current === currentKey) return;
     handledLocationKeyRef.current = currentKey;
     const state = (location.state as ChatRouteState | null) ?? null;
-    if (state?.openRecent) { setLoadingHistory(false); return; }
+    if (state?.openRecent) {
+      setLoadingHistory(false);
+      return;
+    }
     if (chatHistory.length === 0) {
-      setChatHistory([[]]); setActiveChatIndex(0); setLoadingHistory(false); return;
+      setChatHistory([[]]);
+      setActiveChatIndex(0);
+      setLoadingHistory(false);
+      return;
     }
     const emptyIndex = findLastEmptyChatIndex(chatHistory);
-    if (emptyIndex !== -1) setActiveChatIndex(emptyIndex); else newChat();
+    if (emptyIndex !== -1) setActiveChatIndex(emptyIndex);
+    else newChat();
     setLoadingHistory(false);
   }, [chatHistory, location.key, location.state, newChat, setActiveChatIndex, setChatHistory]);
 
-  useEffect(() => { scrollToBottom(); }, [messages, sending, scrollToBottom]);
-  useEffect(() => { resizeTextarea(); }, [input, resizeTextarea]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, sending, scrollToBottom]);
+
+  useEffect(() => {
+    resizeTextarea();
+  }, [input, resizeTextarea]);
 
   /* ── Touch swipe handlers ───────────────────────────────────────────── */
   function onTouchStart(e: React.TouchEvent) {
@@ -270,8 +290,8 @@ export default function Chat() {
     if (touchStartX.current === null || touchStartY.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = Math.abs(e.changedTouches[0].clientY - (touchStartY.current ?? 0));
-    if (dx > 60 && dy < 60) setSidebarOpen(true);   // swipe right → open
-    if (dx < -60 && dy < 60) setSidebarOpen(false);  // swipe left  → close
+    if (dx > 60 && dy < 60) setSidebarOpen(true);
+    if (dx < -60 && dy < 60) setSidebarOpen(false);
     touchStartX.current = null;
     touchStartY.current = null;
   }
@@ -280,18 +300,31 @@ export default function Chat() {
   function addFiles(fileList: FileList | null, kind: "image" | "file") {
     if (!fileList || fileList.length === 0) return;
     const next = Array.from(fileList).map((file, i) => ({
-      id: `${file.name}-${file.size}-${Date.now()}-${i}`, file, kind,
+      id: `${file.name}-${file.size}-${Date.now()}-${i}`,
+      file,
+      kind,
     }));
     setAttachments((prev) => [...prev, ...next]);
   }
 
   function handleAttachPick(e: ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
-    if (!files || files.length === 0) { e.target.value = ""; return; }
+    if (!files || files.length === 0) {
+      e.target.value = "";
+      return;
+    }
     const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
     const rest = Array.from(files).filter((f) => !f.type.startsWith("image/"));
-    if (imgs.length > 0) { const dt = new DataTransfer(); imgs.forEach((f) => dt.items.add(f)); addFiles(dt.files, "image"); }
-    if (rest.length > 0) { const dt = new DataTransfer(); rest.forEach((f) => dt.items.add(f)); addFiles(dt.files, "file"); }
+    if (imgs.length > 0) {
+      const dt = new DataTransfer();
+      imgs.forEach((f) => dt.items.add(f));
+      addFiles(dt.files, "image");
+    }
+    if (rest.length > 0) {
+      const dt = new DataTransfer();
+      rest.forEach((f) => dt.items.add(f));
+      addFiles(dt.files, "file");
+    }
     e.target.value = "";
   }
 
@@ -303,12 +336,18 @@ export default function Chat() {
   async function sendMessage() {
     const text = input.trim();
     if ((!text && attachments.length === 0) || sending) return;
-    if (!API_BASE) { setError("VITE_API_BASE_URL is not set."); return; }
+    if (!API_BASE) {
+      setError("VITE_API_BASE_URL is not set.");
+      return;
+    }
 
-    const attachmentText = attachments.length > 0
-      ? "\n\nAttachments:\n" + attachments.map((item) =>
-          `- ${item.file.name} (${item.kind}, ${formatFileSize(item.file.size)})`).join("\n")
-      : "";
+    const attachmentText =
+      attachments.length > 0
+        ? "\n\nAttachments:\n" +
+          attachments
+            .map((item) => `- ${item.file.name} (${item.kind}, ${formatFileSize(item.file.size)})`)
+            .join("\n")
+        : "";
 
     const finalText = `${text}${attachmentText}`.trim();
     const userMessage: ChatMessage = { role: "user", content: finalText };
@@ -328,22 +367,37 @@ export default function Chat() {
       });
       const data = await safeJson<ChatOut | ApiError>(res);
       if (!res.ok) throw new Error(getErrorMessage(data, "Failed to send message"));
-      const reply = data && typeof data === "object" && "reply" in data && typeof data.reply === "string"
-        ? data.reply : "Sorry, I couldn't generate a reply.";
+      const reply =
+        data && typeof data === "object" && "reply" in data && typeof data.reply === "string"
+          ? data.reply
+          : "Sorry, I couldn't generate a reply.";
       setActiveMessages([...optimisticMessages, { role: "assistant" as const, content: reply }]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send message";
-      setActiveMessages([...optimisticMessages, { role: "assistant" as const, content: `Error: ${msg}` }]);
+      setActiveMessages([
+        ...optimisticMessages,
+        { role: "assistant" as const, content: `Error: ${msg}` },
+      ]);
       setError(msg);
     } finally {
       setSending(false);
-      requestAnimationFrame(() => { resizeTextarea(); textareaRef.current?.focus(); });
+      requestAnimationFrame(() => {
+        resizeTextarea();
+        textareaRef.current?.focus();
+      });
     }
   }
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); sendMessage(); }
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    sendMessage();
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   }
 
   const showHero = !loadingHistory && messages.length === 0;
@@ -354,16 +408,36 @@ export default function Chat() {
   const renderAttachments = () => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 12px 0" }}>
       {attachments.map((item) => (
-        <div key={item.id} style={{
-          display: "flex", alignItems: "center", gap: 6,
-          background: T.muted, border: `2px solid ${T.border}`,
-          borderRadius: 10, padding: "4px 8px",
-          fontFamily: T.fontBody, fontSize: 12, color: T.fg,
-        }}>
+        <div
+          key={item.id}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            background: T.muted,
+            border: `2px solid ${T.border}`,
+            borderRadius: 10,
+            padding: "4px 8px",
+            fontFamily: T.fontBody,
+            fontSize: 12,
+            color: T.fg,
+          }}
+        >
           <span style={{ color: T.accent, display: "flex" }}>
-            {item.kind === "image" ? <ImageIcon size={12} strokeWidth={2.5} /> : <Paperclip size={12} strokeWidth={2.5} />}
+            {item.kind === "image" ? (
+              <ImageIcon size={12} strokeWidth={2.5} />
+            ) : (
+              <Paperclip size={12} strokeWidth={2.5} />
+            )}
           </span>
-          <span style={{ maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span
+            style={{
+              maxWidth: 100,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {item.file.name}
           </span>
           <span style={{ color: T.mutedFg }}>{formatFileSize(item.file.size)}</span>
@@ -371,7 +445,15 @@ export default function Chat() {
             type="button"
             onClick={() => removeAttachment(item.id)}
             aria-label="Remove"
-            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: T.mutedFg, display: "flex", alignItems: "center" }}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              color: T.mutedFg,
+              display: "flex",
+              alignItems: "center",
+            }}
           >
             <X size={12} strokeWidth={2.5} />
           </button>
@@ -381,19 +463,25 @@ export default function Chat() {
   );
 
   const renderComposer = (mode: "hero" | "bottom") => (
-    <form onSubmit={onSubmit} style={{
-      width: "100%",
-      maxWidth: mode === "hero" ? 720 : "100%",
-      margin: mode === "hero" ? "0 auto" : undefined,
-    }}>
-      <div className="chat-composer-shell" style={{
-        background: T.white,
-        border: `2px solid ${T.border}`,
-        borderRadius: 20,
-        boxShadow: T.shadow,
-        transition: "box-shadow 0.2s, border-color 0.2s",
-        overflow: "hidden",
-      }}>
+    <form
+      onSubmit={onSubmit}
+      style={{
+        width: "100%",
+        maxWidth: mode === "hero" ? 720 : "100%",
+        margin: mode === "hero" ? "0 auto" : undefined,
+      }}
+    >
+      <div
+        className="chat-composer-shell"
+        style={{
+          background: T.white,
+          border: `2px solid ${T.border}`,
+          borderRadius: 20,
+          boxShadow: T.shadow,
+          transition: "box-shadow 0.2s, border-color 0.2s",
+          overflow: "hidden",
+        }}
+      >
         {attachments.length > 0 && renderAttachments()}
 
         <textarea
@@ -419,12 +507,14 @@ export default function Chat() {
           }}
         />
 
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "6px 10px 10px",
-        }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "6px 10px 10px",
+          }}
+        >
           {/* Left */}
           <button
             type="button"
@@ -432,11 +522,17 @@ export default function Chat() {
             aria-label="Attach"
             onClick={() => attachInputRef.current?.click()}
             style={{
-              width: 36, height: 36, borderRadius: "50%",
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
               border: `2px solid ${T.border}`,
-              background: T.white, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: T.mutedFg, transition: "background 0.2s",
+              background: T.white,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: T.mutedFg,
+              transition: "background 0.2s",
             }}
           >
             <LinkIcon size={16} strokeWidth={2.5} />
@@ -449,11 +545,17 @@ export default function Chat() {
               className="chat-icon-btn"
               aria-label="Voice"
               style={{
-                width: 36, height: 36, borderRadius: "50%",
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
                 border: `2px solid ${T.border}`,
-                background: T.white, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: T.mutedFg, transition: "background 0.2s",
+                background: T.white,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: T.mutedFg,
+                transition: "background 0.2s",
               }}
             >
               <Mic size={17} strokeWidth={2.5} />
@@ -465,16 +567,22 @@ export default function Chat() {
               disabled={!canSend}
               aria-label="Send"
               style={{
-                height: 36, paddingInline: 18,
+                height: 36,
+                paddingInline: 18,
                 borderRadius: 999,
                 background: canSend ? T.accent : T.muted,
                 border: `2px solid ${canSend ? T.fg : T.border}`,
                 boxShadow: canSend ? T.shadow : "none",
                 color: canSend ? T.white : T.mutedFg,
                 cursor: canSend ? "pointer" : "not-allowed",
-                display: "flex", alignItems: "center", gap: 6,
-                fontFamily: T.fontBody, fontWeight: 600, fontSize: 14,
-                transition: "transform 0.15s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.15s, background 0.2s",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontFamily: T.fontBody,
+                fontWeight: 600,
+                fontSize: 14,
+                transition:
+                  "transform 0.15s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.15s, background 0.2s",
               }}
             >
               <Send size={15} strokeWidth={2.5} />
@@ -485,12 +593,19 @@ export default function Chat() {
       </div>
 
       {error && (
-        <div style={{
-          marginTop: 8, padding: "8px 14px",
-          background: "#FEF2F2", border: `2px solid #FECACA`,
-          borderRadius: 12, boxShadow: "2px 2px 0 #FCA5A5",
-          fontFamily: T.fontBody, fontSize: 13, color: "#DC2626",
-        }}>
+        <div
+          style={{
+            marginTop: 8,
+            padding: "8px 14px",
+            background: "#FEF2F2",
+            border: `2px solid #FECACA`,
+            borderRadius: 12,
+            boxShadow: "2px 2px 0 #FCA5A5",
+            fontFamily: T.fontBody,
+            fontSize: 13,
+            color: "#DC2626",
+          }}
+        >
           {error}
         </div>
       )}
@@ -505,47 +620,75 @@ export default function Chat() {
         <div
           onClick={() => setSidebarOpen(false)}
           style={{
-            position: "fixed", inset: 0, background: "rgba(30,41,59,0.4)",
-            zIndex: 40, animation: "fadeIn 0.2s ease",
+            position: "fixed",
+            inset: 0,
+            background: "rgba(30,41,59,0.4)",
+            zIndex: 40,
+            animation: "fadeIn 0.2s ease",
           }}
         />
       )}
 
       {/* Drawer */}
-      <div style={{
-        position: "fixed", top: 0, left: 0, bottom: 0,
-        width: 280,
-        background: T.bg,
-        borderRight: `2px solid ${T.border}`,
-        boxShadow: sidebarOpen ? "8px 0 32px rgba(30,41,59,0.15)" : "none",
-        zIndex: 50,
-        display: "flex", flexDirection: "column",
-        transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
-        transition: "transform 0.3s cubic-bezier(0.34,1.56,0.64,1)",
-        overflowY: "auto",
-      }}>
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          bottom: NAVBAR_HEIGHT, // ← stops above the navbar
+          width: 280,
+          background: T.bg,
+          borderRight: `2px solid ${T.border}`,
+          boxShadow: sidebarOpen ? "8px 0 32px rgba(30,41,59,0.15)" : "none",
+          zIndex: 50,
+          display: "flex",
+          flexDirection: "column",
+          transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
+          transition: "transform 0.3s cubic-bezier(0.34,1.56,0.64,1)",
+          overflowY: "auto",
+        }}
+      >
         {/* Sidebar header */}
-        <div style={{
-          padding: "20px 16px 12px",
-          borderBottom: `2px solid ${T.border}`,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
+        <div
+          style={{
+            padding: "20px 16px 12px",
+            borderBottom: `2px solid ${T.border}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%",
-              background: T.accent, border: `2px solid ${T.fg}`,
-              boxShadow: T.shadowSm,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                background: T.accent,
+                border: `2px solid ${T.fg}`,
+                boxShadow: T.shadowSm,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <Sparkles size={14} strokeWidth={2.5} color={T.white} />
             </div>
-            <span style={{ fontFamily: T.fontHead, fontWeight: 700, fontSize: 16, color: T.fg }}>
+            <span
+              style={{ fontFamily: T.fontHead, fontWeight: 700, fontSize: 16, color: T.fg }}
+            >
               Chats
             </span>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: T.mutedFg, display: "flex" }}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: T.mutedFg,
+              display: "flex",
+            }}
           >
             <X size={18} strokeWidth={2.5} />
           </button>
@@ -554,13 +697,25 @@ export default function Chat() {
         {/* New chat */}
         <div style={{ padding: "12px 16px" }}>
           <button
-            onClick={() => { newChat(); setSidebarOpen(false); }}
+            onClick={() => {
+              newChat();
+              setSidebarOpen(false);
+            }}
             style={{
-              width: "100%", padding: "10px 16px",
-              background: T.yellow, border: `2px solid ${T.fg}`,
-              borderRadius: 12, boxShadow: T.shadowSm,
-              fontFamily: T.fontBody, fontWeight: 600, fontSize: 14, color: T.fg,
-              cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
+              width: "100%",
+              padding: "10px 16px",
+              background: T.yellow,
+              border: `2px solid ${T.fg}`,
+              borderRadius: 12,
+              boxShadow: T.shadowSm,
+              fontFamily: T.fontBody,
+              fontWeight: 600,
+              fontSize: 14,
+              color: T.fg,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
               transition: "transform 0.15s",
             }}
           >
@@ -569,27 +724,52 @@ export default function Chat() {
         </div>
 
         {/* Chat list */}
-        <div style={{ flex: 1, padding: "0 8px 16px", display: "flex", flexDirection: "column", gap: 2 }}>
+        <div
+          style={{
+            flex: 1,
+            padding: "0 8px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
           {chatHistory.map((msgs, idx) => (
             <button
               key={idx}
               className={`chat-sidebar-item ${idx === activeChatIndex ? "active" : ""}`}
-              onClick={() => { setActiveChatIndex(idx); setSidebarOpen(false); }}
+              onClick={() => {
+                setActiveChatIndex(idx);
+                setSidebarOpen(false);
+              }}
               style={{
-                width: "100%", padding: "10px 12px",
-                background: "none", border: "none", cursor: "pointer",
-                borderRadius: 10, textAlign: "left",
-                display: "flex", alignItems: "center", gap: 10,
-                fontFamily: T.fontBody, fontSize: 13, color: T.fg,
+                width: "100%",
+                padding: "10px 12px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                borderRadius: 10,
+                textAlign: "left",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                fontFamily: T.fontBody,
+                fontSize: 13,
+                color: T.fg,
                 transition: "background 0.15s, transform 0.15s",
-                borderLeft: idx === activeChatIndex ? `3px solid ${T.accent}` : "3px solid transparent",
+                borderLeft:
+                  idx === activeChatIndex ? `3px solid ${T.accent}` : "3px solid transparent",
               }}
             >
               <MessageSquare size={14} strokeWidth={2.5} color={T.mutedFg} />
-              <span style={{
-                flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                fontWeight: idx === activeChatIndex ? 600 : 400,
-              }}>
+              <span
+                style={{
+                  flex: 1,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontWeight: idx === activeChatIndex ? 600 : 400,
+                }}
+              >
                 {getChatTitle(msgs, idx)}
               </span>
             </button>
@@ -617,37 +797,46 @@ export default function Chat() {
         }}
       >
         {/* Avatar icon */}
-        <div style={{
-          flexShrink: 0, width: 34, height: 34, borderRadius: "50%",
-          background: isUser ? T.fg : T.accent,
-          border: `2px solid ${T.fg}`,
-          boxShadow: T.shadowSm,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          marginTop: 2,
-        }}>
-          {isUser
-            ? <User size={15} strokeWidth={2.5} color={T.white} />
-            : <Sparkles size={15} strokeWidth={2.5} color={T.white} />}
+        <div
+          style={{
+            flexShrink: 0,
+            width: 34,
+            height: 34,
+            borderRadius: "50%",
+            background: isUser ? T.fg : T.accent,
+            border: `2px solid ${T.fg}`,
+            boxShadow: T.shadowSm,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginTop: 2,
+          }}
+        >
+          {isUser ? (
+            <User size={15} strokeWidth={2.5} color={T.white} />
+          ) : (
+            <Sparkles size={15} strokeWidth={2.5} color={T.white} />
+          )}
         </div>
 
         {/* Bubble */}
-        <div style={{
-          maxWidth: "min(75%, 680px)",
-          background: isUser ? T.fg : T.white,
-          border: `2px solid ${isUser ? T.fg : T.border}`,
-          borderRadius: isUser
-            ? "20px 4px 20px 20px"
-            : "4px 20px 20px 20px",
-          boxShadow: isUser ? T.shadowSm : `4px 4px 0 ${T.border}`,
-          padding: "12px 16px",
-          color: isUser ? T.white : T.fg,
-          fontFamily: T.fontBody,
-          fontSize: 15,
-          lineHeight: 1.7,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          overflowWrap: "break-word",
-        }}>
+        <div
+          style={{
+            maxWidth: "min(75%, 680px)",
+            background: isUser ? T.fg : T.white,
+            border: `2px solid ${isUser ? T.fg : T.border}`,
+            borderRadius: isUser ? "20px 4px 20px 20px" : "4px 20px 20px 20px",
+            boxShadow: isUser ? T.shadowSm : `4px 4px 0 ${T.border}`,
+            padding: "12px 16px",
+            color: isUser ? T.white : T.fg,
+            fontFamily: T.fontBody,
+            fontSize: 15,
+            lineHeight: 1.7,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            overflowWrap: "break-word",
+          }}
+        >
           {msg.content}
         </div>
       </div>
@@ -660,11 +849,15 @@ export default function Chat() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       style={{
-        minHeight: "100%", width: "100%",
+        // ↓ FIX: subtract navbar height so the whole page fits above it
+        height: `calc(100vh - ${NAVBAR_HEIGHT}px)`,
+        width: "100%",
         background: T.bg,
         fontFamily: T.fontBody,
         position: "relative",
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <input
@@ -681,74 +874,130 @@ export default function Chat() {
 
       {/* ── HERO ── */}
       {showHero ? (
-        <div style={{
-          minHeight: "100vh",
-          display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          padding: "32px 20px 80px",
-          position: "relative", overflow: "hidden",
-        }}>
+        <div
+          style={{
+            // ↓ FIX: fill only the space above the navbar
+            flex: 1,
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "32px 20px 24px",
+            position: "relative",
+          }}
+        >
           {/* Decorative background shapes */}
-          <div style={{
-            position: "absolute", top: "8%", left: "5%",
-            width: 120, height: 120, borderRadius: "50%",
-            background: T.yellow, opacity: 0.35,
-            border: `2px solid ${T.yellow}`,
-          }} />
-          <div style={{
-            position: "absolute", bottom: "12%", right: "6%",
-            width: 80, height: 80, borderRadius: "50%",
-            background: T.mint, opacity: 0.3,
-          }} />
-          <div style={{
-            position: "absolute", top: "18%", right: "10%",
-            width: 50, height: 50,
-            background: T.pink, opacity: 0.25,
-            transform: "rotate(20deg)", borderRadius: 10,
-          }} />
-          <div style={{
-            position: "absolute", bottom: "20%", left: "8%",
-            width: 40, height: 40,
-            background: T.accent, opacity: 0.2,
-            transform: "rotate(-15deg)", borderRadius: 8,
-          }} />
+          <div
+            style={{
+              position: "absolute",
+              top: "8%",
+              left: "5%",
+              width: 120,
+              height: 120,
+              borderRadius: "50%",
+              background: T.yellow,
+              opacity: 0.35,
+              border: `2px solid ${T.yellow}`,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: "12%",
+              right: "6%",
+              width: 80,
+              height: 80,
+              borderRadius: "50%",
+              background: T.mint,
+              opacity: 0.3,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "18%",
+              right: "10%",
+              width: 50,
+              height: 50,
+              background: T.pink,
+              opacity: 0.25,
+              transform: "rotate(20deg)",
+              borderRadius: 10,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: "20%",
+              left: "8%",
+              width: 40,
+              height: 40,
+              background: T.accent,
+              opacity: 0.2,
+              transform: "rotate(-15deg)",
+              borderRadius: 8,
+            }}
+          />
 
           {/* AI badge */}
-          <div style={{
-            marginBottom: 28,
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
-          }}>
-            <div style={{
-              width: 72, height: 72, borderRadius: "50%",
-              background: T.accent,
-              border: `3px solid ${T.fg}`,
-              boxShadow: T.shadowLg,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
+          <div
+            style={{
+              marginBottom: 28,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                background: T.accent,
+                border: `3px solid ${T.fg}`,
+                boxShadow: T.shadowLg,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <Sparkles size={30} strokeWidth={2.5} color={T.white} />
             </div>
 
             <div style={{ textAlign: "center" }}>
-              <h1 style={{
-                fontFamily: T.fontHead,
-                fontWeight: 800,
-                fontSize: "clamp(28px, 5vw, 44px)",
-                color: T.fg,
-                margin: 0, lineHeight: 1.15, letterSpacing: "-0.5px",
-              }}>
+              <h1
+                style={{
+                  fontFamily: T.fontHead,
+                  fontWeight: 800,
+                  fontSize: "clamp(28px, 5vw, 44px)",
+                  color: T.fg,
+                  margin: 0,
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.5px",
+                }}
+              >
                 Ask me anything,{" "}
-                <span style={{
-                  color: T.accent,
-                  display: "inline-block",
-                  borderBottom: `3px solid ${T.yellow}`,
-                }}>
+                <span
+                  style={{
+                    color: T.accent,
+                    display: "inline-block",
+                    borderBottom: `3px solid ${T.yellow}`,
+                  }}
+                >
                   privately
                 </span>
               </h1>
-              <p style={{
-                marginTop: 10, fontFamily: T.fontBody,
-                fontSize: 16, color: T.mutedFg, fontWeight: 500,
-              }}>
+              <p
+                style={{
+                  marginTop: 10,
+                  fontFamily: T.fontBody,
+                  fontSize: 16,
+                  color: T.mutedFg,
+                  fontWeight: 500,
+                }}
+              >
                 Your personal AI — always ready, never judging.
               </p>
             </div>
@@ -758,64 +1007,105 @@ export default function Chat() {
           {renderComposer("hero")}
 
           {/* Quick suggestions */}
-          <div style={{
-            marginTop: 20, display: "flex", flexWrap: "wrap",
-            gap: 8, justifyContent: "center", maxWidth: 680,
-          }}>
-            {["Explain a concept", "Help me write", "Solve a problem", "Summarize this"].map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => { setInput(s); textareaRef.current?.focus(); }}
-                style={{
-                  padding: "7px 14px",
-                  background: T.white, border: `2px solid ${T.border}`,
-                  borderRadius: 999, boxShadow: T.shadowSm,
-                  fontFamily: T.fontBody, fontSize: 13, color: T.mutedFg,
-                  cursor: "pointer", fontWeight: 500,
-                  transition: "border-color 0.2s, color 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = T.accent;
-                  (e.currentTarget as HTMLButtonElement).style.color = T.accent;
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = T.border;
-                  (e.currentTarget as HTMLButtonElement).style.color = T.mutedFg;
-                }}
-              >
-                {s}
-              </button>
-            ))}
+          <div
+            style={{
+              marginTop: 20,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              justifyContent: "center",
+              maxWidth: 680,
+            }}
+          >
+            {["Explain a concept", "Help me write", "Solve a problem", "Summarize this"].map(
+              (s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => {
+                    setInput(s);
+                    textareaRef.current?.focus();
+                  }}
+                  style={{
+                    padding: "7px 14px",
+                    background: T.white,
+                    border: `2px solid ${T.border}`,
+                    borderRadius: 999,
+                    boxShadow: T.shadowSm,
+                    fontFamily: T.fontBody,
+                    fontSize: 13,
+                    color: T.mutedFg,
+                    cursor: "pointer",
+                    fontWeight: 500,
+                    transition: "border-color 0.2s, color 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.borderColor = T.accent;
+                    (e.currentTarget as HTMLButtonElement).style.color = T.accent;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.borderColor = T.border;
+                    (e.currentTarget as HTMLButtonElement).style.color = T.mutedFg;
+                  }}
+                >
+                  {s}
+                </button>
+              )
+            )}
           </div>
 
-          <p style={{
-            marginTop: 32, fontFamily: T.fontBody,
-            fontSize: 12, color: T.mutedFg, textAlign: "center",
-          }}>
+          <p
+            style={{
+              marginTop: 32,
+              fontFamily: T.fontBody,
+              fontSize: 12,
+              color: T.mutedFg,
+              textAlign: "center",
+            }}
+          >
             Learner's AI is in beta and can make mistakes. Review responses carefully.
           </p>
         </div>
       ) : (
         /* ── CONVERSATION ── */
-        <div style={{
-          display: "flex", flexDirection: "column",
-          height: "100vh", maxWidth: 860, margin: "0 auto",
-          padding: "0 16px",
-        }}>
-          {/* Messages area */}
-          <div style={{
-            flex: 1, overflowY: "auto",
-            padding: "24px 0 16px",
-            display: "flex", flexDirection: "column", gap: 18,
-            scrollbarWidth: "thin",
-            scrollbarColor: `${T.border} transparent`,
-          }}>
+        // ↓ FIX: flex: 1 fills the remaining height inside the root div (which already
+        //   excludes the navbar). No more 100vh — the parent handles sizing.
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            maxWidth: 860,
+            width: "100%",
+            margin: "0 auto",
+            padding: "0 16px",
+            minHeight: 0, // ← needed so flex children can scroll properly
+          }}
+        >
+          {/* ── Scrollable messages area ── */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "24px 0 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 18,
+              scrollbarWidth: "thin",
+              scrollbarColor: `${T.border} transparent`,
+              minHeight: 0, // ← same reason
+            }}
+          >
             {loadingHistory ? (
-              <div style={{
-                textAlign: "center", padding: 40,
-                fontFamily: T.fontBody, color: T.mutedFg, fontSize: 15,
-              }}>
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: 40,
+                  fontFamily: T.fontBody,
+                  color: T.mutedFg,
+                  fontSize: 15,
+                }}
+              >
                 Loading conversation…
               </div>
             ) : (
@@ -824,30 +1114,50 @@ export default function Chat() {
 
                 {/* Typing indicator */}
                 {sending && (
-                  <div className="chat-msg-row" style={{
-                    display: "flex", alignItems: "flex-start", gap: 10,
-                  }}>
-                    <div style={{
-                      width: 34, height: 34, borderRadius: "50%",
-                      background: T.accent, border: `2px solid ${T.fg}`,
-                      boxShadow: T.shadowSm, flexShrink: 0,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
+                  <div
+                    className="chat-msg-row"
+                    style={{ display: "flex", alignItems: "flex-start", gap: 10 }}
+                  >
+                    <div
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: "50%",
+                        background: T.accent,
+                        border: `2px solid ${T.fg}`,
+                        boxShadow: T.shadowSm,
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
                       <Sparkles size={15} strokeWidth={2.5} color={T.white} />
                     </div>
-                    <div style={{
-                      background: T.white,
-                      border: `2px solid ${T.border}`,
-                      borderRadius: "4px 20px 20px 20px",
-                      boxShadow: `4px 4px 0 ${T.border}`,
-                      padding: "14px 20px",
-                      display: "flex", alignItems: "center", gap: 5,
-                    }}>
+                    <div
+                      style={{
+                        background: T.white,
+                        border: `2px solid ${T.border}`,
+                        borderRadius: "4px 20px 20px 20px",
+                        boxShadow: `4px 4px 0 ${T.border}`,
+                        padding: "14px 20px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                      }}
+                    >
                       {[0, 1, 2].map((i) => (
-                        <span key={i} className="chat-dot" style={{
-                          width: 8, height: 8, borderRadius: "50%",
-                          background: T.accent, display: "inline-block",
-                        }} />
+                        <span
+                          key={i}
+                          className="chat-dot"
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: T.accent,
+                            display: "inline-block",
+                          }}
+                        />
                       ))}
                     </div>
                   </div>
@@ -858,16 +1168,25 @@ export default function Chat() {
             )}
           </div>
 
-          {/* Sticky composer */}
-          <div style={{
-            paddingBottom: 20, paddingTop: 8,
-            background: `linear-gradient(to bottom, transparent, ${T.bg} 30%)`,
-          }}>
+          {/* ── Sticky composer (never scrolls, always visible above navbar) ── */}
+          <div
+            style={{
+              flexShrink: 0, // ← never shrink; always stays at bottom of flex column
+              paddingBottom: 16,
+              paddingTop: 8,
+              background: `linear-gradient(to bottom, transparent, ${T.bg} 30%)`,
+            }}
+          >
             {renderComposer("bottom")}
-            <p style={{
-              textAlign: "center", marginTop: 8,
-              fontFamily: T.fontBody, fontSize: 11, color: T.mutedFg,
-            }}>
+            <p
+              style={{
+                textAlign: "center",
+                marginTop: 8,
+                fontFamily: T.fontBody,
+                fontSize: 11,
+                color: T.mutedFg,
+              }}
+            >
               Learner's AI is in beta — review responses carefully.
             </p>
           </div>

@@ -1,276 +1,512 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { storage } from "../utils/storage";
+import "../styles/TakeQuiz.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-interface Course {
+// ── Types (mirrored from recommendation_engine.py return dict) ─────────────
+interface CourseRec {
   course_id: number;
   code: string;
   title: string;
   program: string;
-  score: number;
+  score: number; // cosine similarity 0–1
 }
 
-interface Result {
-  recommended_program?: string;
-  confidence?: number;
-  percent_score?: number;
-  gwa?: number;
-  rating?: string;
-  gwa_remarks?: string;
+interface ProfileScoreEntry {
+  skills: number;
+  interests: number;
+  career_goals: number;
+}
+
+interface RecommendOut {
+  user_id: number;
+  cluster_id: number;
+  percent_score: number;
+  gwa: number;
+  rating: string;
+  gwa_remarks: string;
+  preferred_program: string;
+  recommended_program: string;
+  confidence: number;
+  weighted_scores: Record<string, number>; // values 0–1 (e.g. 0.275)
+  profile_scores: Record<string, ProfileScoreEntry>;
   message: string;
-  weighted_scores?: Record<string, number>;
-  profile_scores?: Record<
-    string,
-    { skills: number; interests: number; career_goals: number }
-  >;
-  course_recommendations: Course[];
+  ai_explanation: string;
+  course_recommendations: CourseRec[];
 }
 
-const colors = [
-  "bg-violet-500",
-  "bg-pink-400",
-  "bg-yellow-400",
-  "bg-emerald-400",
-];
+// ── Program label ──────────────────────────────────────────────────────────
+function programLabel(p: string) {
+  const s = (p || "").toUpperCase().trim();
+  if (s === "BSCS") return "BSCS (Computer Science)";
+  if (s === "BSIT") return "BSIT (Information Technology)";
+  if (s === "BSIS") return "BSIS (Information Systems)";
+  if (s === "BTVTED") return "BTVTED ICT";
+  return s || "—";
+}
 
+// ── Typewriter hook ────────────────────────────────────────────────────────
+function useTypewriter(text: string, speed = 16) {
+  const [state, setState] = useState({ displayed: "", done: false, target: "" });
+  const idxRef = useRef(0);
+
+  useEffect(() => {
+    if (!text) return;
+    idxRef.current = 0;
+
+    const interval = window.setInterval(() => {
+      idxRef.current += 1;
+      const slice = text.slice(0, idxRef.current);
+      const finished = idxRef.current >= text.length;
+      setState({ displayed: slice, done: finished, target: text });
+      if (finished) window.clearInterval(interval);
+    }, speed);
+
+    return () => window.clearInterval(interval);
+  }, [text, speed]);
+
+  const displayed = state.target === text ? state.displayed : "";
+  const done = state.target === text ? state.done : false;
+  return { displayed, done };
+}
+
+// ── Score bar ──────────────────────────────────────────────────────────────
+function ScoreBar({
+  label,
+  pct,
+  recommended,
+}: {
+  label: string;
+  pct: number;
+  recommended?: boolean;
+}) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 5,
+        }}
+      >
+        <span style={{ fontWeight: 600, fontSize: 13 }}>{label}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span
+            className={`qpg-pill qpg-pill--sm ${
+              recommended ? "qpg-pill--mint" : "qpg-pill--violet"
+            }`}
+          >
+            {pct.toFixed(1)}%
+          </span>
+          {recommended && (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#10b981",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ✅ Recommended
+            </span>
+          )}
+        </div>
+      </div>
+      <div
+        style={{
+          width: "100%",
+          height: 8,
+          background: "rgba(0,0,0,0.07)",
+          borderRadius: 99,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.min(pct, 100)}%`,
+            height: "100%",
+            background: recommended
+              ? "linear-gradient(90deg,#10b981,#059669)"
+              : "linear-gradient(90deg,#a78bfa,#7c3aed)",
+            borderRadius: 99,
+            transition: "width 1s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 const QuizResults: React.FC = () => {
-  const [data, setData] = useState<Result | null>(null);
+  const [data, setData] = useState<RecommendOut | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchResults = async () => {
-      const token = storage.getToken();
-      const res = await fetch(`${API_BASE}/ai/recommendations`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const result = await res.json();
-      setData(result);
-      setLoading(false);
+      try {
+        const token = storage.getToken();
+        const res = await fetch(`${API_BASE}/ai/recommendations`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json: unknown = await res.json();
+        if (!res.ok) {
+          const detail =
+            typeof json === "object" &&
+            json !== null &&
+            "detail" in json &&
+            typeof (json as Record<string, unknown>).detail === "string"
+              ? (json as Record<string, unknown>).detail as string
+              : `Server error ${res.status}`;
+          setError(detail);
+        } else {
+          setData(json as RecommendOut);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load results");
+      } finally {
+        setLoading(false);
+      }
     };
-
     fetchResults();
   }, []);
 
-  if (loading) return <div className="p-6">Loading...</div>;
-  if (!data) return <div className="p-6">No data</div>;
+  const aiText = data?.ai_explanation ?? "";
+  const { displayed: typedText, done: typingDone } = useTypewriter(aiText, 16);
 
-  // 🔥 SPLIT MESSAGE
-  const rawMessage = data.message || "";
-  const sections = rawMessage.split(/(?=🎯|📌|📊)/g);
-  const summary = sections[0];
-  const rest = sections.slice(1);
+  // ── Loading ──────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="qpg-wrap">
+        <span className="qpg-deco qpg-deco--circle qpg-deco--yellow" />
+        <span className="qpg-deco qpg-deco--circle qpg-deco--pink" />
+        <span className="qpg-deco qpg-deco--triangle qpg-deco--violet" />
+        <div className="qpg-card qpg-card--center">
+          <div className="qpg-card__icon-float qpg-card__icon-float--violet">⏳</div>
+          <h2 className="qpg-heading">Quiz Results</h2>
+          <p className="qpg-body">Loading AI recommendations…</p>
+        </div>
+      </div>
+    );
+  }
 
-  // ✅ FORMATTER (FIXED AI TEXT)
-  const formatText = (text: string) => {
-    return text
-      .replace(/🎯|📊|📌/g, "")
-      .split("\n")
-      .filter((line) => line.trim() !== "")
-      .map((line, i) => (
-        <li key={i} className="flex items-start gap-2">
-          <span className="mt-2 w-2 h-2 bg-slate-400 rounded-full"></span>
-          <span className="text-sm leading-relaxed">
-            {line.trim()}
-          </span>
-        </li>
-      ));
-  };
+  // ── Error ────────────────────────────────────────────────────────────────
+  if (error || !data) {
+    return (
+      <div className="qpg-wrap">
+        <span className="qpg-deco qpg-deco--circle qpg-deco--yellow" />
+        <span className="qpg-deco qpg-deco--circle qpg-deco--pink" />
+        <div className="qpg-card qpg-card--center">
+          <h2 className="qpg-heading">Quiz Results</h2>
+          <p className="qpg-error">{error || "No data returned."}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Derived values ───────────────────────────────────────────────────────
+  const courses: CourseRec[] = Array.isArray(data.course_recommendations)
+    ? data.course_recommendations
+    : [];
+
+  // weighted_scores values come as 0–1 from Python, multiply by 100 for display
+  const weightedEntries: [string, number][] = data.weighted_scores
+    ? Object.entries(data.weighted_scores).sort(([, a], [, b]) => b - a)
+    : [];
+
+  const topProgram = (data.recommended_program ?? "").toUpperCase().trim();
+
+  const scoreDisplay = `${data.percent_score?.toFixed(1) ?? "—"}%`;
 
   return (
-    <>
-      <style>
-        {`
-          .qpg-deco {
-            position: absolute;
-            z-index: 0;
-            pointer-events: none;
-          }
+    <div className="qpg-wrap" style={{ alignItems: "flex-start", padding: "32px 24px" }}>
+      {/* Decorations */}
+      <span className="qpg-deco qpg-deco--circle qpg-deco--yellow" />
+      <span className="qpg-deco qpg-deco--circle qpg-deco--pink" />
+      <span className="qpg-deco qpg-deco--triangle qpg-deco--mint" />
+      <span className="qpg-deco qpg-deco--squiggle" />
 
-          .qpg-deco--circle {
-            border-radius: 9999px;
-          }
+      <style>{`
+        @keyframes qpg-blink {
+          0%,100% { opacity:1; } 50% { opacity:0; }
+        }
+        .qr-grid-2 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          margin-bottom: 20px;
+        }
+        @media (max-width: 768px) {
+          .qr-grid-2 { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
 
-          .qpg-deco--triangle {
-            width: 0;
-            height: 0;
-            border-left: 40px solid transparent;
-            border-right: 40px solid transparent;
-            border-bottom: 70px solid #8B5CF6;
-          }
-
-          .qpg-deco--dots {
-            width: 160px;
-            height: 160px;
-            background-image: radial-gradient(#1E293B 2px, transparent 2px);
-            background-size: 14px 14px;
-            opacity: 0.35;
-
-            position: absolute;
-            bottom: 40px;
-            left: 40px;
-
-            z-index: 0;
-          }
-
-          .qpg-deco--yellow {
-            width: 140px;
-            height: 140px;
-            background: #FBBF24;
-            top: 80px;
-            left: -40px;
-          }
-
-          .qpg-deco--pink {
-            width: 120px;
-            height: 120px;
-            background: #F472B6;
-            bottom: 60px;
-            right: -30px;
-          }
-
-          .qpg-deco--violet {
-            top: 200px;
-            right: 20%;
-          }
-
-          .qpg-deco--dots-pos {
-            bottom: 120px;
-            left: 20%;
-          }
-        `}
-      </style>
-    <div className="min-h-screen overflow-hidden text-slate-800 p-6 space-y-10"
+      <div
         style={{
-          backgroundColor: "#FFFDF5",
-          backgroundImage:
-            "radial-gradient(rgba(100,116,139,0.15) 1.5px, transparent 1.5px)",
-          backgroundSize: "18px 18px",
-        }}>
-
-      {/* TITLE */}
-      <h1 className="text-4xl font-extrabold font-[Outfit]">
-        🎓 Quiz Results
-      </h1>
-
-      {/* MAIN RESULT */}
-      <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-[6px_6px_0px_#E2E8F0]">
-        <h2 className="text-2xl font-bold mb-3">
-          {data.recommended_program}
-        </h2>
-
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <p>Confidence: <b>{data.confidence}%</b></p>
-          <p>Score: <b>{data.percent_score}%</b></p>
-          <p>GWA: <b>{data.gwa}</b></p>
-          <p>Rating: <b>{data.rating}</b></p>
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          maxWidth: 1100,
+          margin: "0 auto",
+        }}
+      >
+        {/* Page title */}
+        <div style={{ marginBottom: 24 }}>
+          <h1 className="qpg-heading" style={{ fontSize: 28, marginBottom: 4 }}>
+            🎓 Quiz Results
+          </h1>
+          <p className="qpg-muted">
+            Your performance summary and AI-powered program recommendation.
+          </p>
         </div>
 
-        <p className="mt-4 text-slate-500">
-          {data.gwa_remarks}
-        </p>
-      </div>
+        {/* ── Row 1: AI Explanation + Assessment Summary ── */}
+        <div className="qr-grid-2">
 
-      {/* 🧠 AI EXPLANATION */}
-      <div>
-        <h2 className="text-2xl font-bold mb-4 font-[Outfit]">
-          🧠 AI Explanation
-        </h2>
-
-        <div className="grid md:grid-cols-2 gap-5">
-
-          {/* SUMMARY */}
-          {summary && (
-            <div className="bg-white border-2 border-slate-200 rounded-2xl p-5 shadow-[6px_6px_0px_#F472B6]">
-              <p className="text-xs uppercase tracking-wide text-slate-400 mb-3">
-                Summary
-              </p>
-
-              <ul className="space-y-2">
-                {formatText(summary)}
-              </ul>
-            </div>
-          )}
-
-          {/* OTHER CARDS */}
-          {rest.map((section, i) => {
-            let title = "Details";
-
-            if (section.includes("🎯")) title = "Recommendation";
-            if (section.includes("📊")) title = "Performance";
-            if (section.includes("📌")) title = "Insights";
-
-            return (
+          {/* Card 1 – Explainable AI */}
+          <div className="qpg-card" style={{ position: "relative", overflow: "hidden" }}>
+            <div
+              style={{
+                position: "absolute", top: -40, right: -40,
+                width: 140, height: 140,
+                background:
+                  "radial-gradient(circle,rgba(124,58,237,0.10) 0%,transparent 70%)",
+                borderRadius: "50%", pointerEvents: "none",
+              }}
+            />
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}
+            >
               <div
-                key={i}
-                className="bg-white border-2 border-slate-200 rounded-2xl p-5 shadow-[6px_6px_0px_#E2E8F0]"
+                className="qpg-card__icon-float qpg-card__icon-float--violet"
+                style={{ position: "static", width: 32, height: 32, fontSize: 16 }}
               >
-                <span className="inline-block bg-yellow-300 px-3 py-1 text-xs rounded-full border border-slate-300 mb-3">
-                  {title}
-                </span>
-
-                <ul className="space-y-2">
-                  {formatText(section)}
-                </ul>
+                🤖
               </div>
-            );
-          })}
-        </div>
-      </div>
+              <h3 className="qpg-subhead" style={{ margin: 0 }}>Explainable AI</h3>
+              {!typingDone && aiText && (
+                <span
+                  className="qpg-pill qpg-pill--violet qpg-pill--sm"
+                  style={{ marginLeft: "auto" }}
+                >
+                  ✦ Analyzing…
+                </span>
+              )}
+            </div>
 
-      {/* 📊 WEIGHTED SCORES */}
-      {data.weighted_scores && (
-        <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-[6px_6px_0px_#E2E8F0]">
-          <h2 className="text-2xl font-bold mb-5">📊 Weighted Scores</h2>
-
-          <div className="space-y-5">
-            {Object.entries(data.weighted_scores).map(([prog, score], i) => {
-              const percent = score * 100;
-
-              return (
-                <div key={prog}>
-                  <div className="flex justify-between mb-1 font-medium">
-                    <span>{prog}</span>
-                    <span>{percent.toFixed(1)}%</span>
-                  </div>
-
-                  <div className="w-full h-5 bg-slate-100 rounded-full overflow-hidden border">
-                    <div
-                      className={`h-full ${colors[i % colors.length]} transition-all duration-700`}
-                      style={{ width: `${percent}%` }}
+            <div className="qpg-message-box" style={{ minHeight: 100 }}>
+              {aiText ? (
+                <p
+                  className="qpg-body"
+                  style={{ lineHeight: 1.8, whiteSpace: "pre-wrap" }}
+                >
+                  {typedText}
+                  {!typingDone && (
+                    <span
+                      style={{
+                        display: "inline-block", width: 2, height: "1em",
+                        background: "currentColor", marginLeft: 2,
+                        animation: "qpg-blink 0.7s step-end infinite",
+                        verticalAlign: "text-bottom",
+                      }}
                     />
-                  </div>
+                  )}
+                </p>
+              ) : (
+                <p className="qpg-muted">No AI explanation available.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2 – Assessment Summary */}
+          <div className="qpg-card">
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}
+            >
+              <div
+                className="qpg-card__icon-float qpg-card__icon-float--amber"
+                style={{ position: "static", width: 32, height: 32, fontSize: 16 }}
+              >
+                📋
+              </div>
+              <h3 className="qpg-subhead" style={{ margin: 0 }}>Assessment Summary</h3>
+            </div>
+
+            <div
+              className="qpg-result-grid"
+              style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}
+            >
+              <div
+                className="qpg-result-box qpg-result-box--violet"
+                style={{ padding: "14px 16px" }}
+              >
+                <div className="qpg-result-label">Rating</div>
+                <div className="qpg-result-value" style={{ fontSize: 15 }}>
+                  {data.rating || "—"}
                 </div>
-              );
-            })}
+                <div className="qpg-result-hint">Est. GWA: {data.gwa?.toFixed(2) ?? "—"}</div>
+              </div>
+              <div
+                className="qpg-result-box qpg-result-box--amber"
+                style={{ padding: "14px 16px" }}
+              >
+                <div className="qpg-result-label">Score</div>
+                <div className="qpg-result-value" style={{ fontSize: 15 }}>
+                  {scoreDisplay}
+                </div>
+                <div className="qpg-result-hint">Overall readiness</div>
+              </div>
+            </div>
+
+            {data.gwa_remarks && (
+              <div className="qpg-message-box" style={{ padding: "12px 16px" }}>
+                <p className="qpg-body" style={{ fontSize: 13, lineHeight: 1.7 }}>
+                  <strong>Remarks:</strong> {data.gwa_remarks}
+                </p>
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      {/* 📚 COURSES */}
-      <div>
-        <h2 className="text-2xl font-bold mb-4">📚 Courses</h2>
+        {/* ── Row 2: Recommendation + Suggested Courses ── */}
+        <div className="qr-grid-2">
 
-        <div className="grid md:grid-cols-2 gap-5">
-          {data.course_recommendations.map((c) => (
+          {/* Card 3 – Recommendation */}
+          <div className="qpg-card">
             <div
-              key={c.course_id}
-              className="bg-white border-2 border-slate-200 rounded-2xl p-5 shadow-[6px_6px_0px_#E2E8F0]"
+              style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}
             >
-              <p className="font-bold">{c.code}</p>
-              <p className="text-sm mb-2">{c.title}</p>
-              <p className="text-xs text-slate-500">{c.program}</p>
-
-              <button className="mt-4 w-full bg-violet-500 text-white py-2 rounded-full border-2 border-slate-800 shadow-[4px_4px_0px_#1E293B] hover:-translate-x-1 hover:-translate-y-1 transition">
-                Study Now →
-              </button>
+              <div
+                className="qpg-card__icon-float qpg-card__icon-float--mint"
+                style={{ position: "static", width: 32, height: 32, fontSize: 16 }}
+              >
+                🎯
+              </div>
+              <h3 className="qpg-subhead" style={{ margin: 0 }}>Recommendation</h3>
             </div>
-          ))}
+
+            {/* Preferred / Recommended labels */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+              {data.preferred_program && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span className="qpg-body" style={{ fontSize: 13, opacity: 0.7 }}>
+                    Preferred Program
+                  </span>
+                  <span className="qpg-pill qpg-pill--violet">
+                    {programLabel(data.preferred_program)}
+                  </span>
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span className="qpg-body" style={{ fontSize: 13, opacity: 0.7 }}>
+                  Recommended Program
+                </span>
+                <span className="qpg-pill qpg-pill--mint">
+                  {programLabel(data.recommended_program)}
+                </span>
+              </div>
+              {data.confidence != null && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span className="qpg-body" style={{ fontSize: 13, opacity: 0.7 }}>
+                    Confidence
+                  </span>
+                  <span className="qpg-pill qpg-pill--amber">{data.confidence}%</span>
+                </div>
+              )}
+            </div>
+
+            {/* Weighted score bars — values are 0–1, multiply by 100 */}
+            {weightedEntries.length > 0 && (
+              <>
+                <p
+                  className="qpg-body"
+                  style={{ fontWeight: 700, fontSize: 12, marginBottom: 12, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.05em" }}
+                >
+                  Recommendation Scores
+                </p>
+                {weightedEntries.map(([prog, score]) => (
+                  <ScoreBar
+                    key={prog}
+                    label={programLabel(prog)}
+                    pct={score * 100}
+                    recommended={prog.toUpperCase().trim() === topProgram}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* Card 4 – Suggested Courses */}
+          <div className="qpg-card">
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}
+            >
+              <div
+                className="qpg-card__icon-float qpg-card__icon-float--pink"
+                style={{ position: "static", width: 32, height: 32, fontSize: 16 }}
+              >
+                📚
+              </div>
+              <h3 className="qpg-subhead" style={{ margin: 0 }}>Suggested Courses</h3>
+              <span className="qpg-pill qpg-pill--violet qpg-pill--sm" style={{ marginLeft: "auto" }}>
+                {courses.length} courses
+              </span>
+            </div>
+
+            {courses.length > 0 ? (
+              <div className="qpg-courses">
+                {courses.slice(0, 10).map((c, i) => (
+                  <div key={c.course_id} className="qpg-course-row">
+                    <div className="qpg-course-left">
+                      <span className="qpg-course-code">
+                        {i + 1}. [{c.code}]
+                      </span>
+                      <span className="qpg-course-title">{c.title}</span>
+                      <span className="qpg-course-meta">{programLabel(c.program)}</span>
+                    </div>
+                    <div className="qpg-course-score">
+                      {(c.score * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="qpg-message-box" style={{ textAlign: "center", padding: "32px 16px" }}>
+                <p style={{ fontSize: 28, marginBottom: 8 }}>📭</p>
+                <p className="qpg-body" style={{ fontWeight: 600, marginBottom: 4 }}>
+                  No courses available yet
+                </p>
+                <p className="qpg-muted" style={{ fontSize: 12 }}>
+                  Course recommendations require courses to be seeded in the database.
+                </p>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
-
     </div>
-    </>
   );
 };
 

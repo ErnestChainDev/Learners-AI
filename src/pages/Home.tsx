@@ -329,7 +329,7 @@ export default function Dashboard() {
         `}
       </style>
 
-      <div className="relative min-h-full bg-[#f6f7fb] overflow-x-hidden">
+      <div className="relative min-h-full bg-[#f6f7fb] overflow-x-clip">
         {/* Background decorations — clipped so they never cause horizontal scroll */}
         <span className="qpg-deco qpg-deco--circle qpg-deco--yellow" />
         <span className="qpg-deco qpg-deco--circle qpg-deco--pink" />
@@ -831,7 +831,7 @@ export default function Dashboard() {
             </div>
 
             {/* RIGHT SIDE — hidden on mobile, shown on xl+ */}
-            <div className="hidden xl:block">
+            <div className="min-w-0">
               <DashboardRightWidgets courseCount={courses.length} />
             </div>
           </div>

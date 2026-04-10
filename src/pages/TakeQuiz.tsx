@@ -11,83 +11,7 @@ import type {
 } from "../types/quiz.types";
 import "../styles/TakeQuiz.css";
 
-type CourseRec = {
-  course_id: number;
-  code: string;
-  title: string;
-  program: string;
-  score: number;
-};
-
-type RecommendOut = {
-  user_id: number;
-  cluster_id: number;
-  percent_score: number;
-  gwa: number;
-  rating: string;
-  gwa_remarks: string;
-  recommended_program: string;
-  confidence: number;
-  message: string;
-  course_recommendations: CourseRec[];
-};
-
-type UnknownObj = Record<string, unknown>;
-
-function isObj(v: unknown): v is UnknownObj {
-  return typeof v === "object" && v !== null;
-}
-function num(v: unknown, fb = 0) {
-  return typeof v === "number" && Number.isFinite(v) ? v : fb;
-}
-function str(v: unknown, fb = "") {
-  return typeof v === "string" ? v : fb;
-}
-function arrUnknown(v: unknown): unknown[] {
-  return Array.isArray(v) ? v : [];
-}
-
-function parseCourseRec(v: unknown): CourseRec {
-  const o = isObj(v) ? v : {};
-  return {
-    course_id: num(o.course_id, 0),
-    code: str(o.code, ""),
-    title: str(o.title, ""),
-    program: str(o.program, ""),
-    score: num(o.score, 0),
-  };
-}
-
-function parseRec(raw: unknown): { rec: RecommendOut | null; detail?: string } {
-  if (!isObj(raw)) return { rec: null };
-  if (typeof raw.detail === "string") return { rec: null, detail: raw.detail };
-
-  const rec: RecommendOut = {
-    user_id: num(raw.user_id, 0),
-    cluster_id: num(raw.cluster_id, 0),
-    percent_score: num(raw.percent_score, 0),
-    gwa: num(raw.gwa, 0),
-    rating: str(raw.rating, ""),
-    gwa_remarks: str(raw.gwa_remarks, ""),
-    recommended_program: str(raw.recommended_program, ""),
-    confidence: num(raw.confidence, 0),
-    message: str(raw.message, ""),
-    course_recommendations: arrUnknown(raw.course_recommendations).map(parseCourseRec),
-  };
-
-  if (!rec.recommended_program && !rec.message) return { rec: null };
-  return { rec };
-}
-
-function programLabel(p: string) {
-  const s = (p || "").toUpperCase().trim();
-  if (s === "BSCS") return "BSCS (Computer Science)";
-  if (s === "BSIT") return "BSIT (Information Technology)";
-  if (s === "BSIS") return "BSIS (Information Systems)";
-  if (s === "BTVTED") return "BTVTED ICT";
-  return s || "—";
-}
-
+// ─── Types ────────────────────────────────────────────────────────────────────
 type LocalAnswer = {
   questionId: number;
   answerState: AnswerState;
@@ -111,6 +35,70 @@ function formatTime(seconds: number) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+// ─── Submitted Screen (shown right after submit, before going to results) ─────
+interface SubmittedScreenProps {
+  submitOut: SubmitQuizOut;
+  onCheckResults: () => void;
+  onBackHome: () => void;
+}
+
+function SubmittedScreen({ submitOut, onCheckResults, onBackHome }: SubmittedScreenProps) {
+  const percent =
+    submitOut.total > 0
+      ? Math.round((submitOut.score / submitOut.total) * 1000) / 10
+      : 0;
+
+    return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-[#f6f7fb] overflow-hidden">
+      
+      {/* Background decorations */}
+      <span className="qpg-deco qpg-deco--circle qpg-deco--yellow" />
+      <span className="qpg-deco qpg-deco--circle qpg-deco--pink" />
+      <span className="qpg-deco qpg-deco--triangle qpg-deco--mint" />
+      <span className="qpg-deco qpg-deco--squiggle" />
+
+      {/* Centered card */}
+      <div className="qpg-card qpg-card--center relative z-10 w-full max-w-md">
+        
+        <div className="qpg-card__icon-float qpg-card__icon-float--mint">✅</div>
+
+        <h2 className="qpg-heading text-center">Quiz Submitted!</h2>
+
+        <div className="qpg-pills flex flex-wrap justify-center gap-2 mb-4">
+          <span className="qpg-pill qpg-pill--violet">
+            Attempt #{submitOut.attempt_id}
+          </span>
+          <span className="qpg-pill qpg-pill--amber">
+            Score: {submitOut.score}/{submitOut.total} ({percent}%)
+          </span>
+        </div>
+
+        <p className="qpg-body text-center mb-6">
+          Your answers have been recorded. Click below to view your full results
+          and AI-powered program recommendations.
+        </p>
+
+        <div className="flex flex-col gap-3 items-center">
+          <button
+            className="qpg-btn qpg-btn--primary w-full"
+            onClick={onCheckResults}
+          >
+            📊 Check Quiz Results
+          </button>
+
+          <button
+            className="qpg-btn qpg-btn--secondary w-full"
+            onClick={onBackHome}
+          >
+            ← Back to Home
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main TakeQuiz component ──────────────────────────────────────────────────
 export default function TakeQuiz() {
   const navigate = useNavigate();
 
@@ -124,7 +112,7 @@ export default function TakeQuiz() {
 
   const [answers, setAnswers] = useState<Record<number, LocalAnswer>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<SubmitQuizOut | null>(null);
+  const [submitOut, setSubmitOut] = useState<SubmitQuizOut | null>(null);
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -147,11 +135,13 @@ export default function TakeQuiz() {
   );
   const unansweredCount = total - answeredCount - missedCount;
 
+  // Lock body scroll while quiz is open
   useEffect(() => {
     document.body.classList.add("quiz-taking-mode");
     return () => document.body.classList.remove("quiz-taking-mode");
   }, []);
 
+  // ── Bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -159,7 +149,7 @@ export default function TakeQuiz() {
       setLoading(true);
       setStarting(true);
       setError("");
-      setResult(null);
+      setSubmitOut(null);
 
       try {
         const start = await quizApi.startAttempt(20);
@@ -183,9 +173,7 @@ export default function TakeQuiz() {
             questionId: saved.question_id,
             answerState: saved.answer_state,
             selectedOptionId: saved.selected_option_id ?? null,
-            mappings: (saved.mappings ?? []).filter(
-              (m) => m.item_key && m.target_key
-            ),
+            mappings: saved.mappings ?? [],
           };
         }
 
@@ -210,11 +198,13 @@ export default function TakeQuiz() {
     return () => { cancelled = true; };
   }, []);
 
+  // ── Reset timer on question change ────────────────────────────────────────
   useEffect(() => {
     if (!currentId) return;
     setTimeLeft(currentTimeLimit);
   }, [currentId, currentTimeLimit]);
 
+  // ── Persist helpers ────────────────────────────────────────────────────────
   const persistAnswer = useCallback(
     async (payload: SaveAnswerIn) => {
       if (!attemptId) return;
@@ -223,12 +213,15 @@ export default function TakeQuiz() {
     [attemptId]
   );
 
-  const buildPayloadFromLocal = useCallback((answer: LocalAnswer): SaveAnswerIn => ({
-    question_id: answer.questionId,
-    answer_state: answer.answerState,
-    selected_option_id: answer.selectedOptionId,
-    mappings: answer.mappings,
-  }), []);
+  const buildPayloadFromLocal = useCallback(
+    (answer: LocalAnswer): SaveAnswerIn => ({
+      question_id: answer.questionId,
+      answer_state: answer.answerState,
+      selected_option_id: answer.selectedOptionId,
+      mappings: answer.mappings,
+    }),
+    []
+  );
 
   const updateLocalAnswer = useCallback(
     (questionId: number, updater: (prev: LocalAnswer) => LocalAnswer) => {
@@ -243,7 +236,10 @@ export default function TakeQuiz() {
   const debouncedSave = useCallback(
     (payload: SaveAnswerIn) => {
       if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = window.setTimeout(() => void persistAnswer(payload), 250);
+      saveTimeoutRef.current = window.setTimeout(
+        () => void persistAnswer(payload),
+        250
+      );
     },
     [persistAnswer]
   );
@@ -276,6 +272,7 @@ export default function TakeQuiz() {
     [buildPayloadFromLocal, debouncedSave, updateLocalAnswer]
   );
 
+  // ── Question timeout ───────────────────────────────────────────────────────
   const handleQuestionTimeout = useCallback(async () => {
     if (!current || !attemptId) return;
 
@@ -302,8 +299,9 @@ export default function TakeQuiz() {
     if (idx < total - 1) setIdx((v) => Math.min(total - 1, v + 1));
   }, [answers, attemptId, buildPayloadFromLocal, current, idx, persistAnswer, total]);
 
+  // ── Per-question countdown ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!currentId || !attemptId || result) return;
+    if (!currentId || !attemptId || submitOut) return;
 
     const timer = window.setInterval(() => {
       setTimeLeft((prev) => {
@@ -317,15 +315,19 @@ export default function TakeQuiz() {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [attemptId, currentId, result, handleQuestionTimeout]);
+  }, [attemptId, currentId, submitOut, handleQuestionTimeout]);
 
+  // ── Cleanup debounce on unmount ────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
     };
   }, []);
 
-  function questionStatus(questionId: number): "current" | "answered" | "missed" | "unanswered" {
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function questionStatus(
+    questionId: number
+  ): "current" | "answered" | "missed" | "unanswered" {
     if (current?.id === questionId) return "current";
     const a = answers[questionId];
     if (!a) return "unanswered";
@@ -339,25 +341,22 @@ export default function TakeQuiz() {
     setIdx(nextIdx);
   }
 
+  // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!attemptId) return;
     setError("");
     setSubmitting(true);
 
     try {
-      const answersPayload = items.map((q) => {
+      const payload = items.map((q) => {
         const local = answers[q.id] ?? buildInitialAnswer(q.id);
         return buildPayloadFromLocal(local);
       });
 
-      const payload = {
-        answers: answersPayload, // ✅ FIXED
-      };
+      const res = await quizApi.submitAttempt(attemptId, payload);
 
-      console.log("SUBMIT PAYLOAD:", payload); // 🔍 debug
-
-      const res = await quizApi.submitAttempt(attemptId, answersPayload);
-      setResult(res);
+      // ✅ Show the intermediate "submitted" screen with the Check Results button
+      setSubmitOut(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submit failed");
     } finally {
@@ -381,11 +380,23 @@ export default function TakeQuiz() {
     }
   }
 
+  // ── Navigate to /quiz-results, passing submitOut via router state ──────────
+  function handleCheckResults() {
+    if (!submitOut) return;
+    navigate("/quiz-results", {
+      state: { submitOut },
+      replace: false,
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════════════════════════════════
+
   /* ── Loading ── */
   if (loading) {
     return (
       <div className="qpg-wrap">
-        {/* Decorative background shapes */}
         <span className="qpg-deco qpg-deco--circle qpg-deco--yellow" />
         <span className="qpg-deco qpg-deco--circle qpg-deco--pink" />
         <span className="qpg-deco qpg-deco--triangle qpg-deco--violet" />
@@ -410,7 +421,10 @@ export default function TakeQuiz() {
           <h2 className="qpg-heading">Take a Quiz</h2>
           <p className="qpg-error">{error}</p>
           <div className="qpg-nav">
-            <button className="qpg-btn qpg-btn--secondary" onClick={() => navigate("/home")}>
+            <button
+              className="qpg-btn qpg-btn--secondary"
+              onClick={() => navigate("/home")}
+            >
               ← Back
             </button>
           </div>
@@ -419,102 +433,14 @@ export default function TakeQuiz() {
     );
   }
 
-  /* ── Result ── */
-  if (result) {
-    const { rec, detail } = parseRec(result.recommendation);
-    const percent =
-      result.total > 0 ? Math.round((result.score / result.total) * 1000) / 10 : 0;
-    const courses = rec?.course_recommendations ?? [];
-
+  /* ── Submitted screen (shows "Check Quiz Results" button) ── */
+  if (submitOut) {
     return (
-      <div className="qpg-wrap">
-        {/* Decorations */}
-        <span className="qpg-deco qpg-deco--circle qpg-deco--yellow" />
-        <span className="qpg-deco qpg-deco--circle qpg-deco--pink" />
-        <span className="qpg-deco qpg-deco--triangle qpg-deco--mint" />
-        <span className="qpg-deco qpg-deco--squiggle" />
-
-        <div className="qpg-card qpg-result-card">
-          {/* Header */}
-          <div className="qpg-result-header">
-            <div className="qpg-card__icon-float qpg-card__icon-float--mint">🎉</div>
-            <h2 className="qpg-heading">Quiz Result</h2>
-            <div className="qpg-pills">
-              <span className="qpg-pill qpg-pill--violet">Attempt #{result.attempt_id}</span>
-              <span className="qpg-pill qpg-pill--amber">
-                Score: {result.score}/{result.total} ({percent}%)
-              </span>
-            </div>
-          </div>
-
-          {detail && <p className="qpg-error">Recommendation error: {detail}</p>}
-
-          {/* Stats grid */}
-          <div className="qpg-result-grid">
-            <div className="qpg-result-box qpg-result-box--violet">
-              <div className="qpg-result-label">Rating</div>
-              <div className="qpg-result-value">{rec?.rating || "—"}</div>
-              <div className="qpg-result-hint">{rec?.gwa_remarks || ""}</div>
-            </div>
-            <div className="qpg-result-box qpg-result-box--amber">
-              <div className="qpg-result-label">Estimated GWA</div>
-              <div className="qpg-result-value">{rec ? rec.gwa.toFixed(2) : "—"}</div>
-              <div className="qpg-result-hint">
-                {rec ? `Percent score: ${rec.percent_score.toFixed(1)}%` : ""}
-              </div>
-            </div>
-            <div className="qpg-result-box qpg-result-box--mint">
-              <div className="qpg-result-label">Recommended Program</div>
-              <div className="qpg-result-value">
-                {rec ? programLabel(rec.recommended_program) : "—"}
-              </div>
-              <div className="qpg-result-hint">
-                {rec ? `Confidence: ${rec.confidence}% · Cluster: ${rec.cluster_id}` : ""}
-              </div>
-            </div>
-          </div>
-
-          <h3 className="qpg-subhead">Recommendation Details</h3>
-          <div className="qpg-message-box">
-            {rec?.message ? (
-              <pre className="qpg-pre">{rec.message}</pre>
-            ) : (
-              <p className="qpg-muted">No recommendation message returned. Check your AI service.</p>
-            )}
-          </div>
-
-          <h3 className="qpg-subhead">Suggested Courses</h3>
-          {courses.length ? (
-            <div className="qpg-courses">
-              {courses.slice(0, 10).map((c) => (
-                <div key={c.course_id} className="qpg-course-row">
-                  <div className="qpg-course-left">
-                    <span className="qpg-course-code">{c.code}</span>
-                    <span className="qpg-course-title">{c.title}</span>
-                    <span className="qpg-course-meta">{programLabel(c.program)}</span>
-                  </div>
-                  <div className="qpg-course-score">{(c.score * 100).toFixed(1)}%</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="qpg-muted">No course recommendations yet.</p>
-          )}
-
-          {!rec && (
-            <>
-              <h3 className="qpg-subhead">Raw Recommendation (Debug)</h3>
-              <pre className="qpg-json">{JSON.stringify(result.recommendation, null, 2)}</pre>
-            </>
-          )}
-
-          <div className="qpg-nav" style={{ marginTop: 24 }}>
-            <button className="qpg-btn qpg-btn--primary" onClick={() => navigate("/home")}>
-              ← Back to Home
-            </button>
-          </div>
-        </div>
-      </div>
+      <SubmittedScreen
+        submitOut={submitOut}
+        onCheckResults={handleCheckResults}
+        onBackHome={() => navigate("/home", { replace: true })}
+      />
     );
   }
 
@@ -537,7 +463,7 @@ export default function TakeQuiz() {
 
   return (
     <div className="qpg-wrap qpg-wrap--wide">
-      {/* Background decorations */}
+      <span className="qpg-deco qpg-deco--circle qpg-deco--yellow" aria-hidden="true" />
       <span className="qpg-deco qpg-deco--circle qpg-deco--pink" aria-hidden="true" />
       <span className="qpg-deco qpg-deco--triangle qpg-deco--violet" aria-hidden="true" />
       <span className="qpg-deco qpg-deco--dots" aria-hidden="true" />
@@ -589,12 +515,16 @@ export default function TakeQuiz() {
                 <div className="qpg-stat-row">
                   <span className="qpg-stat-dot qpg-stat-dot--answered" />
                   <span>Answered</span>
-                  <strong className="qpg-pill qpg-pill--mint qpg-pill--sm">{answeredCount}</strong>
+                  <strong className="qpg-pill qpg-pill--mint qpg-pill--sm">
+                    {answeredCount}
+                  </strong>
                 </div>
                 <div className="qpg-stat-row">
                   <span className="qpg-stat-dot qpg-stat-dot--missed" />
                   <span>Missed</span>
-                  <strong className="qpg-pill qpg-pill--pink qpg-pill--sm">{missedCount}</strong>
+                  <strong className="qpg-pill qpg-pill--pink qpg-pill--sm">
+                    {missedCount}
+                  </strong>
                 </div>
                 <div className="qpg-stat-row">
                   <span className="qpg-stat-dot qpg-stat-dot--unanswered" />
@@ -665,7 +595,7 @@ export default function TakeQuiz() {
               ) : (
                 <button
                   className="qpg-btn qpg-btn--primary"
-                  onClick={handleSubmit}
+                  onClick={() => void handleSubmit()}
                   disabled={submitting}
                 >
                   {submitting ? "Submitting…" : "Submit Quiz ✓"}
