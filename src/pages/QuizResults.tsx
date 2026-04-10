@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { storage } from "../utils/storage";
 import "../styles/TakeQuiz.css";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
-
 // ── Types (mirrored from recommendation_engine.py return dict) ─────────────
 interface CourseRec {
   course_id: number;
@@ -141,6 +141,7 @@ function ScoreBar({
 
 // ── Main component ─────────────────────────────────────────────────────────
 const QuizResults: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<RecommendOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -460,7 +461,12 @@ const QuizResults: React.FC = () => {
           {/* Card 4 – Suggested Courses */}
           <div className="qpg-card">
             <div
-              style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 14,
+              }}
             >
               <div
                 className="qpg-card__icon-float qpg-card__icon-float--pink"
@@ -468,8 +474,15 @@ const QuizResults: React.FC = () => {
               >
                 📚
               </div>
-              <h3 className="qpg-subhead" style={{ margin: 0 }}>Suggested Courses</h3>
-              <span className="qpg-pill qpg-pill--violet qpg-pill--sm" style={{ marginLeft: "auto" }}>
+
+              <h3 className="qpg-subhead" style={{ margin: 0 }}>
+                Suggested Courses
+              </h3>
+
+              <span
+                className="qpg-pill qpg-pill--violet qpg-pill--sm"
+                style={{ marginLeft: "auto" }}
+              >
                 {courses.length} courses
               </span>
             </div>
@@ -477,26 +490,47 @@ const QuizResults: React.FC = () => {
             {courses.length > 0 ? (
               <div className="qpg-courses">
                 {courses.slice(0, 10).map((c, i) => (
-                  <div key={c.course_id} className="qpg-course-row">
+                  <button
+                    key={c.course_id}
+                    onClick={() => navigate(`/courses/${c.course_id}`)}
+                    className="qpg-course-row w-full text-left transition-all duration-200 
+                              hover:scale-[1.02] hover:bg-gray-50 hover:shadow-sm 
+                              active:scale-[0.98]"
+                  >
                     <div className="qpg-course-left">
                       <span className="qpg-course-code">
                         {i + 1}. [{c.code}]
                       </span>
-                      <span className="qpg-course-title">{c.title}</span>
-                      <span className="qpg-course-meta">{programLabel(c.program)}</span>
+
+                      <span className="qpg-course-title">
+                        {c.title}
+                      </span>
+
+                      <span className="qpg-course-meta">
+                        {programLabel(c.program)}
+                      </span>
                     </div>
+
                     <div className="qpg-course-score">
                       {(c.score * 100).toFixed(1)}%
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
-              <div className="qpg-message-box" style={{ textAlign: "center", padding: "32px 16px" }}>
+              <div
+                className="qpg-message-box"
+                style={{ textAlign: "center", padding: "32px 16px" }}
+              >
                 <p style={{ fontSize: 28, marginBottom: 8 }}>📭</p>
-                <p className="qpg-body" style={{ fontWeight: 600, marginBottom: 4 }}>
+
+                <p
+                  className="qpg-body"
+                  style={{ fontWeight: 600, marginBottom: 4 }}
+                >
                   No courses available yet
                 </p>
+
                 <p className="qpg-muted" style={{ fontSize: 12 }}>
                   Course recommendations require courses to be seeded in the database.
                 </p>
