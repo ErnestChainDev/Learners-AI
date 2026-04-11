@@ -641,7 +641,7 @@ const Hero = () => {
       </div>
 
       {/* Scroll hint */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-50">
+      <div className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-50 z-20">
         <span
           className="text-xs text-slate-500"
           style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
