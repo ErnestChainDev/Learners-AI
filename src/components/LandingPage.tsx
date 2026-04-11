@@ -494,7 +494,7 @@ const About = () => (
             className="text-slate-500 text-lg leading-relaxed mb-6"
             style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
           >
-            Learner's AI is a smart academic decision-support platform designed to guide students in selecting the most suitable courses. By analyzing your academic background, preferences, and career interests, the system provides personalized and explainable recommendations to help you make informed decisions.
+            Learner's AI is a smart academic decision-support platform designed to guide students in selecting the most suitable courses. By analyzing your quiz performance, skills, preferences, and career interests, the system provides personalized and explainable recommendations to help you make informed decisions.
           </p>
           <div className="flex gap-4 flex-wrap">
             <PrimaryBtn to="/register">Learn More</PrimaryBtn>
