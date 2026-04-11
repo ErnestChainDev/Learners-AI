@@ -2,6 +2,8 @@ import React from "react";
 import book from "../assets/SorSu-logo.png";
 import bgVideo from "../assets/SorSU.jpg";
 import bgImage from "../assets/SorSU.jpg";
+import { useNavigate } from "react-router-dom";
+
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -14,6 +16,7 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({
   title,
   subtitle,
 }) => {
+  const navigate = useNavigate();
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-6 sm:p-6">
       {/* Background */}
@@ -45,7 +48,8 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({
               <img
                 src={book}
                 alt="Learner's Portal"
-                className="h-20 w-20 sm:h-30 sm:w-30 rounded-xl object-cover"
+                onClick={() => navigate("/")}
+                className="h-20 w-20 sm:h-30 sm:w-30 rounded-xl object-cover cursor-pointer hover:scale-105 transition"
               />
 
               {/* Text BELOW logo */}
