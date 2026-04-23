@@ -1359,7 +1359,7 @@ export default function Profile() {
 
       {/* ── Right Sidebar ─────────────────────────────────────────────────── */}
       <div className="min-w-0">
-        <DashboardRightWidgets courseCount={Object.keys(COURSE_IMAGES).length} />
+        <DashboardRightWidgets />
       </div>
 
       {/* ── Toast Notifications ───────────────────────────────────────────── */}

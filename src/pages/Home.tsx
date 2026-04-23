@@ -832,7 +832,7 @@ export default function Dashboard() {
 
             {/* RIGHT SIDE — hidden on mobile, shown on xl+ */}
             <div className="min-w-0">
-              <DashboardRightWidgets courseCount={courses.length} />
+              <DashboardRightWidgets />
             </div>
           </div>
         </div>
