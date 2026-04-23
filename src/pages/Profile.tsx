@@ -7,6 +7,8 @@ import {
   Target,
   Heart,
   Lightbulb,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { storage } from "../utils/storage";
@@ -42,6 +44,15 @@ type LatestLearnItem = {
 };
 
 type SectionIconKey = "career" | "interests" | "skills";
+
+// ── Toast types ───────────────────────────────────────────────────────────────
+type ToastType = "success" | "error";
+
+type ToastItem = {
+  id: number;
+  type: ToastType;
+  message: string;
+};
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
@@ -211,6 +222,132 @@ function useTouchHover<T extends HTMLElement>() {
     };
   }, []);
   return ref;
+}
+
+// ─── useToast hook ────────────────────────────────────────────────────────────
+function useToast() {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const counterRef = useRef(0);
+
+  const showToast = useCallback((type: ToastType, message: string) => {
+    const id = ++counterRef.current;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  return { toasts, showToast, dismissToast };
+}
+
+// ─── ToastContainer ───────────────────────────────────────────────────────────
+function ToastContainer({
+  toasts,
+  onDismiss,
+}: {
+  toasts: ToastItem[];
+  onDismiss: (id: number) => void;
+}) {
+  if (toasts.length === 0) return null;
+
+  return (
+    <>
+      <div
+        className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3"
+        aria-live="polite"
+        aria-label="Notifications"
+      >
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`
+              flex items-start gap-3
+              min-w-65 max-w-85
+              rounded-xl border-2 border-[#1E293B] bg-white
+              px-4 py-3
+              shadow-[5px_5px_0px_#1E293B]
+              font-['Plus_Jakarta_Sans',system-ui,sans-serif]
+              animate-[toastSlideIn_0.35s_cubic-bezier(0.34,1.56,0.64,1)_both]
+            `}
+            role="alert"
+          >
+            {/* Icon */}
+            <span
+              className={`
+                mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center
+                rounded-full border-2 border-[#1E293B]
+                ${toast.type === "success" ? "bg-[#34D399]" : "bg-[#F472B6]"}
+              `}
+            >
+              {toast.type === "success" ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-[#1E293B]" strokeWidth={2.5} />
+              ) : (
+                <XCircle className="h-3.5 w-3.5 text-[#1E293B]" strokeWidth={2.5} />
+              )}
+            </span>
+
+            {/* Text */}
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-extrabold text-[#1E293B] leading-tight">
+                {toast.type === "success" ? "Success!" : "Something went wrong"}
+              </p>
+              <p className="mt-0.5 text-[12px] font-medium text-[#475569] leading-snug">
+                {toast.message}
+              </p>
+            </div>
+
+            {/* Dismiss */}
+            <button
+              type="button"
+              onClick={() => onDismiss(toast.id)}
+              className="
+                mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center
+                rounded-full border-2 border-[#CBD5E1] bg-white
+                text-[#64748B]
+                transition-all duration-150
+                hover:border-[#1E293B] hover:bg-[#F1F5F9] hover:text-[#1E293B]
+                active:scale-95
+              "
+              aria-label="Dismiss notification"
+            >
+              <X className="h-3 w-3" strokeWidth={2.5} />
+            </button>
+
+            {/* Progress bar */}
+            <span
+              className={`
+                absolute bottom-0 left-0 h-0.75 rounded-b-xl
+                ${toast.type === "success" ? "bg-[#34D399]" : "bg-[#F472B6]"}
+                animate-[toastProgress_3.5s_linear_both]
+              `}
+              style={{ width: "100%" }}
+            />
+          </div>
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes toastSlideIn {
+          from {
+            opacity: 0;
+            transform: translateX(60px) scale(0.92);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+        }
+        @keyframes toastProgress {
+          from { width: 100%; }
+          to   { width: 0%; }
+        }
+      `}</style>
+    </>
+  );
 }
 
 // ─── SectionCard ─────────────────────────────────────────────────────────────
@@ -395,6 +532,9 @@ export default function Profile() {
   const interestsIconInputRef = useRef<HTMLInputElement | null>(null);
   const skillsIconInputRef = useRef<HTMLInputElement | null>(null);
 
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  const { toasts, showToast, dismissToast } = useToast();
+
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchProfile = useCallback(
     async (signal?: AbortSignal) => {
@@ -503,6 +643,25 @@ export default function Profile() {
     setError("");
   };
 
+  // ── Detect what changed for toast message ──────────────────────────────────
+  const getChangedFields = useCallback(
+    (prev: ProfileOut, next: ProfileOut): string => {
+      const labels: string[] = [];
+      if (prev.full_name !== next.full_name.trim()) labels.push("Name");
+      if (prev.strand !== next.strand.trim()) labels.push("Strand");
+      if (prev.preferred_program !== next.preferred_program.trim()) labels.push("Preferred Program");
+      if (prev.career_goals !== next.career_goals.trim()) labels.push("Career Goals");
+      if (prev.interests !== next.interests.trim()) labels.push("Interests");
+      if (prev.skills !== next.skills.trim()) labels.push("Skills");
+      if (prev.notes !== next.notes.trim()) labels.push("Notes");
+      if (labels.length === 0) return "Profile saved successfully.";
+      if (labels.length === 1) return `${labels[0]} updated successfully.`;
+      if (labels.length === 2) return `${labels[0]} and ${labels[1]} updated successfully.`;
+      return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]} updated successfully.`;
+    },
+    []
+  );
+
   const saveAll = useCallback(async () => {
     if (!draft) return;
     if (!apiBase) { setError("Missing VITE_API_BASE_URL."); return; }
@@ -545,17 +704,28 @@ export default function Profile() {
         skills: server.skills ?? draft.skills,
         notes: server.notes ?? draft.notes,
       });
+
+      // Show success toast with changed fields
+      if (profile) {
+        const message = getChangedFields(profile, merged);
+        showToast("success", message);
+      } else {
+        showToast("success", "Profile saved successfully.");
+      }
+
       setProfile(merged);
       setDraft(merged);
       setEditing(false);
       setEditingNotes(false);
       storage.setProfile(merged);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to save profile");
+      const msg = e instanceof Error ? e.message : "Failed to save profile";
+      setError(msg);
+      showToast("error", msg);
     } finally {
       setSaving(false);
     }
-  }, [apiBase, draft]);
+  }, [apiBase, draft, profile, getChangedFields, showToast]);
 
   const saveNotesOnly = useCallback(async () => {
     if (!draft || !profile) return;
@@ -585,7 +755,11 @@ export default function Profile() {
       const result = await readImage(file);
       setProfileImage(result);
       localStorage.setItem("profileImage", result);
-    } catch { setError("Failed to read profile image."); }
+      showToast("success", "Profile image updated.");
+    } catch {
+      setError("Failed to read profile image.");
+      showToast("error", "Failed to read profile image.");
+    }
   };
 
   const handleCoverImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -596,7 +770,11 @@ export default function Profile() {
       const result = await readImage(file);
       setCoverImage(result);
       localStorage.setItem("profileCoverImage", result);
-    } catch { setError("Failed to read background image."); }
+      showToast("success", "Cover image updated.");
+    } catch {
+      setError("Failed to read background image.");
+      showToast("error", "Failed to read background image.");
+    }
   };
 
   const handleSectionIconChange = async (
@@ -608,10 +786,19 @@ export default function Profile() {
     if (!file.type.startsWith("image/")) { setError("Please select a valid section icon image."); return; }
     try {
       const result = await readImage(file);
+      const labelMap: Record<SectionIconKey, string> = {
+        career: "Career Goals icon",
+        interests: "Interests icon",
+        skills: "Skills icon",
+      };
       if (key === "career") { setCareerIconImage(result); localStorage.setItem("profileCareerIcon", result); }
       else if (key === "interests") { setInterestsIconImage(result); localStorage.setItem("profileInterestsIcon", result); }
       else { setSkillsIconImage(result); localStorage.setItem("profileSkillsIcon", result); }
-    } catch { setError("Failed to read section icon image."); }
+      showToast("success", `${labelMap[key]} updated.`);
+    } catch {
+      setError("Failed to read section icon image.");
+      showToast("error", "Failed to read section icon image.");
+    }
   };
 
   // ── Loading state ──────────────────────────────────────────────────────────
@@ -1175,6 +1362,9 @@ export default function Profile() {
         <DashboardRightWidgets courseCount={Object.keys(COURSE_IMAGES).length} />
       </div>
 
+      {/* ── Toast Notifications ───────────────────────────────────────────── */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
       {/* ── Global keyframes + touch-hover CSS ───────────────────────────── */}
       <style>{`
         @keyframes marquee {
@@ -1184,6 +1374,20 @@ export default function Profile() {
         @keyframes bounce {
           from { transform: translateY(0); }
           to   { transform: translateY(-8px); }
+        }
+        @keyframes toastSlideIn {
+          from {
+            opacity: 0;
+            transform: translateX(60px) scale(0.92);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+        }
+        @keyframes toastProgress {
+          from { width: 100%; }
+          to   { width: 0%; }
         }
 
         /* ── Touch-hover: fires the same visual as :hover on tap ── */

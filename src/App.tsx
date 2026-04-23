@@ -18,6 +18,7 @@ import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
 import Feedback from "./pages/Feedback";
 import LandingPage from "./components/LandingPage";
+import { Toaster } from "react-hot-toast";
 
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,7 @@ function Protected({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <BrowserRouter>
+    <Toaster position="top-right" />
       <Routes>
         {/* Public */}
         <Route path="/" element={<Navigate to="/landingpage" replace />} />

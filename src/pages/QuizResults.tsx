@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useRef } from "react";
 import { storage } from "../utils/storage";
 import "../styles/TakeQuiz.css";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
-
 // ── Types (mirrored from recommendation_engine.py return dict) ─────────────
 interface CourseRec {
   course_id: number;
   code: string;
   title: string;
   program: string;
-  score: number; // cosine similarity 0–1
+  score: number;
 }
 
 interface ProfileScoreEntry {
@@ -29,7 +29,7 @@ interface RecommendOut {
   preferred_program: string;
   recommended_program: string;
   confidence: number;
-  weighted_scores: Record<string, number>; // values 0–1 (e.g. 0.275)
+  weighted_scores: Record<string, number>;
   profile_scores: Record<string, ProfileScoreEntry>;
   message: string;
   ai_explanation: string;
@@ -141,9 +141,13 @@ function ScoreBar({
 
 // ── Main component ─────────────────────────────────────────────────────────
 const QuizResults: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<RecommendOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // ✅ ADDED: rating popup state
+  const [showRatePopup, setShowRatePopup] = useState(false);
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -176,6 +180,13 @@ const QuizResults: React.FC = () => {
 
   const aiText = data?.ai_explanation ?? "";
   const { displayed: typedText, done: typingDone } = useTypewriter(aiText, 16);
+
+  // ✅ ADDED: trigger popup 5s after typewriter finishes
+  useEffect(() => {
+    if (!typingDone) return;
+    const timer = window.setTimeout(() => setShowRatePopup(true), 5000);
+    return () => window.clearTimeout(timer);
+  }, [typingDone]);
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -212,13 +223,11 @@ const QuizResults: React.FC = () => {
     ? data.course_recommendations
     : [];
 
-  // weighted_scores values come as 0–1 from Python, multiply by 100 for display
   const weightedEntries: [string, number][] = data.weighted_scores
     ? Object.entries(data.weighted_scores).sort(([, a], [, b]) => b - a)
     : [];
 
   const topProgram = (data.recommended_program ?? "").toUpperCase().trim();
-
   const scoreDisplay = `${data.percent_score?.toFixed(1) ?? "—"}%`;
 
   return (
@@ -241,6 +250,16 @@ const QuizResults: React.FC = () => {
         }
         @media (max-width: 768px) {
           .qr-grid-2 { grid-template-columns: 1fr !important; }
+        }
+
+        /* ✅ ADDED: popup animations */
+        @keyframes qpg-popup-in {
+          from { opacity: 0; transform: translate(-50%, -50%) scale(0.88); }
+          to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        @keyframes qpg-overlay-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
       `}</style>
 
@@ -297,7 +316,10 @@ const QuizResults: React.FC = () => {
               )}
             </div>
 
-            <div className="qpg-message-box" style={{ minHeight: 100 }}>
+            <div
+              className="qpg-message-box"
+              style={{ minHeight: 100, maxHeight: 260, overflowY: "auto" }}
+            >
               {aiText ? (
                 <p
                   className="qpg-body"
@@ -388,7 +410,6 @@ const QuizResults: React.FC = () => {
               <h3 className="qpg-subhead" style={{ margin: 0 }}>Recommendation</h3>
             </div>
 
-            {/* Preferred / Recommended labels */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
               {data.preferred_program && (
                 <div
@@ -436,7 +457,6 @@ const QuizResults: React.FC = () => {
               )}
             </div>
 
-            {/* Weighted score bars — values are 0–1, multiply by 100 */}
             {weightedEntries.length > 0 && (
               <>
                 <p
@@ -460,7 +480,12 @@ const QuizResults: React.FC = () => {
           {/* Card 4 – Suggested Courses */}
           <div className="qpg-card">
             <div
-              style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 14,
+              }}
             >
               <div
                 className="qpg-card__icon-float qpg-card__icon-float--pink"
@@ -468,8 +493,15 @@ const QuizResults: React.FC = () => {
               >
                 📚
               </div>
-              <h3 className="qpg-subhead" style={{ margin: 0 }}>Suggested Courses</h3>
-              <span className="qpg-pill qpg-pill--violet qpg-pill--sm" style={{ marginLeft: "auto" }}>
+
+              <h3 className="qpg-subhead" style={{ margin: 0 }}>
+                Suggested Courses
+              </h3>
+
+              <span
+                className="qpg-pill qpg-pill--violet qpg-pill--sm"
+                style={{ marginLeft: "auto" }}
+              >
                 {courses.length} courses
               </span>
             </div>
@@ -477,22 +509,35 @@ const QuizResults: React.FC = () => {
             {courses.length > 0 ? (
               <div className="qpg-courses">
                 {courses.slice(0, 10).map((c, i) => (
-                  <div key={c.course_id} className="qpg-course-row">
+                  <button
+                    key={c.course_id}
+                    onClick={() => navigate(`/courses/${c.course_id}`)}
+                    className="qpg-course-row w-full text-left transition-all duration-200 
+                              hover:scale-[1.02] hover:bg-gray-50 hover:shadow-sm 
+                              active:scale-[0.98]"
+                  >
                     <div className="qpg-course-left">
                       <span className="qpg-course-code">
                         {i + 1}. [{c.code}]
                       </span>
-                      <span className="qpg-course-title">{c.title}</span>
-                      <span className="qpg-course-meta">{programLabel(c.program)}</span>
+                      <span className="qpg-course-title">
+                        {c.title}
+                      </span>
+                      <span className="qpg-course-meta">
+                        {programLabel(c.program)}
+                      </span>
                     </div>
                     <div className="qpg-course-score">
                       {(c.score * 100).toFixed(1)}%
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
-              <div className="qpg-message-box" style={{ textAlign: "center", padding: "32px 16px" }}>
+              <div
+                className="qpg-message-box"
+                style={{ textAlign: "center", padding: "32px 16px" }}
+              >
                 <p style={{ fontSize: 28, marginBottom: 8 }}>📭</p>
                 <p className="qpg-body" style={{ fontWeight: 600, marginBottom: 4 }}>
                   No courses available yet
@@ -506,6 +551,117 @@ const QuizResults: React.FC = () => {
 
         </div>
       </div>
+
+      {/* ✅ ADDED: Rating Popup */}
+      {showRatePopup && (
+        <>
+          {/* Overlay */}
+          <div
+            onClick={() => setShowRatePopup(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.45)",
+              zIndex: 1000,
+              animation: "qpg-overlay-in 0.25s ease",
+            }}
+          />
+
+          {/* Popup card */}
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 1001,
+              width: "100%",
+              maxWidth: 400,
+              padding: "0 16px",
+              animation: "qpg-popup-in 0.3s cubic-bezier(0.34,1.56,0.64,1)",
+            }}
+          >
+            <div className="qpg-card" style={{ position: "relative", overflow: "hidden", margin: 0 }}>
+
+              {/* Decorative glow */}
+              <div
+                style={{
+                  position: "absolute", top: -50, right: -50,
+                  width: 160, height: 160,
+                  background: "radial-gradient(circle,rgba(124,58,237,0.12) 0%,transparent 70%)",
+                  borderRadius: "50%", pointerEvents: "none",
+                }}
+              />
+
+              {/* Icon + title */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <div
+                  className="qpg-card__icon-float qpg-card__icon-float--violet"
+                  style={{ position: "static", width: 36, height: 36, fontSize: 18 }}
+                >
+                  ⭐
+                </div>
+                <h3 className="qpg-subhead" style={{ margin: 0 }}>
+                  Enjoying your results?
+                </h3>
+              </div>
+
+              {/* Message */}
+              <div className="qpg-message-box" style={{ marginBottom: 20, padding: "12px 16px" }}>
+                <p className="qpg-body" style={{ fontSize: 13, lineHeight: 1.7, margin: 0 }}>
+                  We'd love to hear your feedback! Your rating helps us improve the quiz experience for everyone. 🙏
+                </p>
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => navigate("/feedback")}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 10,
+                    border: "none",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    background: "linear-gradient(135deg,#a78bfa,#7c3aed)",
+                    color: "#fff",
+                    boxShadow: "0 4px 14px rgba(124,58,237,0.30)",
+                    transition: "opacity 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                >
+                  ⭐ Rate Now
+                </button>
+
+                <button
+                  onClick={() => setShowRatePopup(false)}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 10,
+                    border: "1.5px solid rgba(0,0,0,0.10)",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    background: "transparent",
+                    color: "inherit",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.05)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  Later
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </>
+      )}
+
     </div>
   );
 };

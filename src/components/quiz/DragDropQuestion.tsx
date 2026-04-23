@@ -10,7 +10,7 @@ type Props = {
 function buildCurrentMap(value: DragDropMappingIn[]) {
   const map: Record<string, string> = {};
   for (const row of value) {
-    if (!row.item_key || !row.target_key) continue; // ✅ CLEAN
+    if (!row.item_key || !row.target_key) continue;
     map[row.item_key] = row.target_key;
   }
   return map;
@@ -19,7 +19,6 @@ function buildCurrentMap(value: DragDropMappingIn[]) {
 export default function DragDropQuestion({ items, value, onChange }: Props) {
   const [draggingItemKey, setDraggingItemKey] = useState<string>("");
 
-  // ✅ CLEAN incoming mappings (fix ghost answers)
   const safeValue = useMemo(
     () => value.filter((v) => v.item_key && v.target_key),
     [value]
@@ -27,13 +26,11 @@ export default function DragDropQuestion({ items, value, onChange }: Props) {
 
   const currentMap = useMemo(() => buildCurrentMap(safeValue), [safeValue]);
 
-  // ✅ ONLY VALID TARGETS (2 slots only)
   const targets = useMemo(() => {
     const map = new Map<string, string>();
 
     for (const item of items) {
       if (!item.target_key || !item.target_label) continue;
-
       if (!map.has(item.target_key)) {
         map.set(item.target_key, item.target_label);
       }
@@ -45,14 +42,12 @@ export default function DragDropQuestion({ items, value, onChange }: Props) {
     }));
   }, [items]);
 
-  // ✅ UNPLACED ITEMS (3 draggable)
   const unplacedItems = useMemo(() => {
     const placedKeys = new Set(Object.keys(currentMap));
     return items.filter((item) => !placedKeys.has(item.item_key));
   }, [items, currentMap]);
 
   function assign(itemKey: string, targetKey: string) {
-    // ❌ prevent duplicate slot
     const alreadyUsed = safeValue.find((v) => v.target_key === targetKey);
     if (alreadyUsed) return;
 
@@ -87,7 +82,37 @@ export default function DragDropQuestion({ items, value, onChange }: Props) {
 
       {/* DRAG ITEMS */}
       <div className="dragBank">
-        <h4 className="dragTitle">Draggable Items</h4>
+        {/* ✅ ADDED: header row with title + points instruction */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <h4 className="dragTitle" style={{ margin: 0 }}>Draggable Items</h4>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#7c3aed",
+              background: "rgba(124,58,237,0.10)",
+              border: "1px solid rgba(124,58,237,0.25)",
+              borderRadius: 99,
+              padding: "2px 10px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            🏅 1 point each
+          </span>
+        </div>
+
+        {/* ✅ ADDED: instruction line */}
+        <p
+          style={{
+            fontSize: 12,
+            color: "#6b7280",
+            marginBottom: 10,
+            marginTop: 0,
+            lineHeight: 1.5,
+          }}
+        >
+          Each correctly placed item earns <strong>1 point</strong>. Drag and drop every item into its matching target slot.
+        </p>
 
         <div className="dragBankGrid">
           {unplacedItems.map((item) => (
@@ -109,7 +134,7 @@ export default function DragDropQuestion({ items, value, onChange }: Props) {
         </div>
       </div>
 
-      {/* DROP TARGETS (2 ONLY) */}
+      {/* DROP TARGETS */}
       <div className="dragTargets">
         <h4 className="dragTitle">Drop Targets</h4>
 
